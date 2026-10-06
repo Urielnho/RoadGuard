@@ -1,13 +1,25 @@
 export type Vehicle = 'auto' | 'moto' | 'bici';
 export type Reading = { time: number; speed: number | null; acceleration: number | null; rotation: number | null; tilt: number | null; heading: number | null; altitude: number | null; pressure: number | null; latitude: number | null; longitude: number | null };
 export type RiskEvent = { time: number; type: string; points: number; reason: string };
-export type Trip = { id: string; vehicle: Vehicle; simulated: boolean; start: number; end: number; distance: number; averageRisk: number; readings: Reading[]; events: RiskEvent[] };
+export type Trip = { id: string; vehicle: Vehicle; simulated: boolean; start: number; end: number; distance: number | null; averageRisk: number | null; readings: Reading[]; events: RiskEvent[] };
 export const vehicles: Record<Vehicle, { name: string; icon: string; speed: number; acceleration: number; rotation: number; tilt: number }> = {
   auto: { name: 'Automóvil', icon: '🚗', speed: 80, acceleration: 3.5, rotation: 1.2, tilt: 35 },
   moto: { name: 'Motocicleta', icon: '🏍️', speed: 70, acceleration: 4, rotation: 1.5, tilt: 50 },
   bici: { name: 'Bicicleta', icon: '🚲', speed: 30, acceleration: 2.5, rotation: 1.8, tilt: 40 },
 };
 export const emptyReading = (): Reading => ({ time: Date.now(), speed: null, acceleration: null, rotation: null, tilt: null, heading: null, altitude: null, pressure: null, latitude: null, longitude: null });
+export type SensorTimes = { acceleration: number; rotation: number; heading: number; pressure: number; gps: number };
+export const emptySensorTimes = (): SensorTimes => ({ acceleration: 0, rotation: 0, heading: 0, pressure: 0, gps: 0 });
+export function freshReading(latest: Reading, times: SensorTimes, now: number): Reading {
+  const reading = { ...latest, time: now };
+  const stale = (timestamp: number, limit: number) => timestamp <= 0 || now - timestamp > limit || timestamp > now;
+  if (stale(times.acceleration, 3000)) { reading.acceleration = null; reading.tilt = null; }
+  if (stale(times.rotation, 3000)) reading.rotation = null;
+  if (stale(times.heading, 3000)) reading.heading = null;
+  if (stale(times.pressure, 10000)) reading.pressure = null;
+  if (stale(times.gps, 5000)) { reading.speed = null; reading.latitude = null; reading.longitude = null; reading.altitude = null; }
+  return reading;
+}
 export function evaluate(reading: Reading, previous: Reading | null, vehicle: Vehicle): RiskEvent[] {
   const limits = vehicles[vehicle];
   const events: RiskEvent[] = [];

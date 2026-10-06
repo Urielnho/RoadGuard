@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { distanceBetween, emptyReading, evaluate, riskLabel, riskScore } from '../src/domain.ts';
+import { distanceBetween, emptyReading, emptySensorTimes, evaluate, freshReading, riskLabel, riskScore } from '../src/domain.ts';
 test('missing sensors never fabricate events', () => {
   assert.deepEqual(evaluate(emptyReading(), null, 'auto'), []);
 });
@@ -30,4 +30,17 @@ test('distance calculation handles absent data and known coordinates', () => {
   const a = { ...emptyReading(), latitude: 0, longitude: 0 };
   const b = { ...a, longitude: 0.001 };
   assert.ok(Math.abs(distanceBetween(a, b) - 111.195) < 0.1);
+});
+test('unreceived sensor data cannot become live numbers', () => {
+  const latest = { ...emptyReading(), speed: 25, acceleration: 2, rotation: 1, tilt: 5, heading: 90, pressure: 1000, altitude: 100, latitude: 1, longitude: 1 };
+  assert.deepEqual(freshReading(latest, emptySensorTimes(), 20000), { ...emptyReading(), time: 20000 });
+});
+test('expired sensors are invalidated independently while real zero is preserved', () => {
+  const latest = { ...emptyReading(), acceleration: 0, rotation: 1, tilt: 5, heading: 90, pressure: 1000, speed: 25, latitude: 1, longitude: 1, altitude: 100 };
+  const times = { acceleration: 19500, rotation: 16000, heading: 16000, pressure: 15000, gps: 14000 };
+  const reading = freshReading(latest, times, 20000);
+  assert.equal(reading.acceleration, 0); assert.equal(reading.tilt, 5);
+  assert.equal(reading.pressure, 1000); assert.equal(reading.rotation, null); assert.equal(reading.heading, null);
+  assert.equal(reading.speed, null); assert.equal(reading.latitude, null); assert.equal(reading.altitude, null);
+  assert.equal(freshReading(latest, times, 26000).pressure, null);
 });

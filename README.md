@@ -27,21 +27,21 @@ Si Expo Go indica una versión incompatible, revisa su SDK antes de cambiar depe
 - Monitoreo por segundo, riesgo de 0 a 100 y explicación de cada regla.
 - Cuenta regresiva de 10 segundos para posible accidente experimental.
 - Resumen e historial persistente en SQLite, incluyendo lecturas y eventos.
-- Modo de demostración separado: todos sus datos son simulados, distancia no generada y estadísticas reales excluyen esos viajes.
+- Datos exclusivamente reales: sin generadores de datos ni botones de simulación. El historial omite recorridos simulados de versiones anteriores.
 
-## Demostración segura
+## Prueba con sensores reales
 
-1. Activa el modo de demostración, selecciona vehículo y prepara el viaje.
-2. Calibra e inicia. Espera a que aparezcan 25 km/h.
-3. Activa la frenada; observa la regla y el evento.
-4. Espera a volver a 25 km/h; activa el posible accidente.
-5. Confirma “Estoy bien” o deja terminar la cuenta. Solo se genera una alerta en pantalla; no se envían mensajes.
-6. Finaliza y revisa el historial. Cierra y vuelve a abrir la aplicación para comprobar persistencia.
-7. Desactiva la simulación para probar sensores reales, quieto y al aire libre para obtener GPS. No provoques accidentes o maniobras peligrosas.
+1. Ejecuta `npm start` y abre el QR con Expo Go en el teléfono físico.
+2. Selecciona vehículo y abre “Preparar viaje”. Autoriza ubicación y movimiento.
+3. Comprueba el estado de los sensores. Un sensor disponible no muestra valores hasta recibir una lectura.
+4. Deja el teléfono quieto, calibra e inicia el viaje.
+5. Las lecturas se muestran directamente en “Sensores en tiempo real” y se actualizan automáticamente cada segundo.
+6. Cambia suavemente la orientación para observar inclinación, rotación y dirección. Prueba GPS al aire libre, sin realizar maniobras peligrosas.
+7. Finaliza para guardar y abre el historial. No se generan velocidades, impactos ni eventos artificiales.
 
-Los escenarios están en “Probar escenarios”, dentro del viaje. “Lecturas de sensores” y “Explicación del riesgo” permiten consultar los detalles sin saturar la pantalla. Las restricciones del proyecto están accesibles desde “Acerca de”.
+Los sensores de movimiento solicitan actualizaciones cada 100 ms. GPS y barómetro dependen de la frecuencia que entregue el sistema operativo. La pantalla utiliza las últimas lecturas válidas; los datos faltantes o caducados muestran “—”.
 
-Para revisar la interfaz en el navegador: `npm run web`. Esa vista usa almacenamiento local del navegador; Android e iOS usan SQLite. Las pruebas de sensores de la entrega deben hacerse en dispositivos físicos.
+Para revisar la interfaz en el navegador: `npm run web`. Esa vista usa almacenamiento local del navegador; Android e iOS usan SQLite. No hay modo simulado tampoco en la vista web: si no existen sensores o permisos, no habrá lecturas ni se podrá calibrar.
 
 ## Arquitectura y reglas
 
@@ -51,7 +51,7 @@ Los umbrales son académicos y no están validados como sistema de seguridad ni 
 
 La aceleración del sensor se procesa con un filtro de gravedad y conserva el pico de cada segundo; no distingue por sí sola frenada de aceleración. Esas dos reglas usan el cambio de velocidad GPS. La inclinación es el ángulo entre la gravedad filtrada actual y la calibrada. La dirección del magnetómetro es aproximada, depende de la posición y no compensa inclinación. El barómetro muestra presión en hPa; la altitud mostrada proviene del GPS. La pendiente y la altitud barométrica aún no se calculan.
 
-Se rechaza GPS con precisión peor que 35 metros y se invalidan coordenadas/velocidad después de 5 segundos sin lectura válida. La distancia descarta desplazamientos menores de 3 metros y saltos superiores a 60 m/s; puede subestimar viajes lentos. Datos ausentes aparecen como “—”. La heurística de accidente exige impacto >18 m/s², inclinación sobre umbral, velocidad previa >15 km/h y actual <5 km/h entre muestras de hasta 5 segundos. No es detección fiable de accidentes.
+Se rechaza GPS con precisión peor que 35 metros y se invalidan coordenadas/velocidad después de 5 segundos sin lectura válida. La distancia descarta desplazamientos menores de 3 metros y saltos superiores a 60 m/s; puede subestimar viajes lentos. Datos ausentes aparecen como “—”. Acelerómetro, giroscopio y magnetómetro caducan a los 3 segundos sin datos nuevos; presión a los 10 segundos. Después de tomar una muestra, los picos de movimiento se vacían hasta que llegue otra lectura real, sin sustituirlos por cero. Distancia y riesgo promedio quedan sin datos si no hubo lecturas suficientes. La heurística de accidente exige impacto >18 m/s², inclinación sobre umbral, velocidad previa >15 km/h y actual <5 km/h entre muestras de hasta 5 segundos. No es detección fiable de accidentes.
 
 El historial es local y no cifra recorridos. Los viajes se guardan al finalizar; cerrar forzosamente la app antes de guardar pierde el viaje activo. En segundo plano se omiten muestras y no se garantiza monitoreo; vuelve al primer plano para continuar. Duración incluye esas pausas; promedio de riesgo solo incluye muestras monitoreadas.
 

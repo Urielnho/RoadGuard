@@ -6,9 +6,9 @@ Monitorear un viaje en automóvil, motocicleta o bicicleta y mostrar señales de
 
 ## Flujo de uso
 
-1. **Inicio:** elegir vehículo. Los viajes reales usan los sensores del dispositivo; la demostración se activa con su interruptor.
+1. **Inicio:** elegir vehículo. Los viajes usan exclusivamente los sensores del dispositivo.
 2. **Preparación:** fijar el teléfono, revisar sensores y calibrar. El botón para iniciar se habilita tras la calibración.
-3. **Viaje:** consultar el índice de riesgo, velocidad y distancia. Los paneles desplegables muestran lecturas y el motivo de cada regla.
+3. **Viaje:** consultar el índice de riesgo, velocidad y distancia. Las lecturas de sensores se muestran directamente y se actualizan cada segundo. Un panel desplegable explica las reglas activas.
 4. **Alerta:** confirmar “Estoy bien” ante una combinación de señales anómalas. La cuenta termina en una alerta local.
 5. **Resumen:** revisar duración, distancia, riesgo promedio y eventos. Los viajes se guardan al finalizar.
 6. **Historial:** abrir los recorridos guardados en el mismo dispositivo.
@@ -26,18 +26,18 @@ Monitorear un viaje en automóvil, motocicleta o bicicleta y mostrar señales de
 | Posible accidente | Heurística experimental que combina impacto, inclinación y caída de velocidad |
 | Alerta | Pantalla de confirmación y cuenta de 10 segundos; exclusivamente local |
 | Base de datos | SQLite en Android e iOS: viajes, lecturas y eventos persistidos al finalizar |
-| Demostración | Datos simulados identificados durante el recorrido y en su historial |
+| Datos en vivo | Lecturas exclusivamente reales; los datos ausentes o caducados aparecen como “—” |
 | Interfaz | Tema claro, navegación Inicio/Historial, estados vacíos y detalles desplegables |
 
 ## Guion para exposición (3–5 minutos)
 
-- Presentar el problema: convertir sensores disponibles en señales comprensibles durante un recorrido.
-- Seleccionar automóvil y activar demostración. Preparar y calibrar.
-- Iniciar y esperar a ver 25 km/h. Abrir “Lecturas de sensores” para mostrar las unidades.
-- Abrir “Probar escenarios” y simular frenada. Explicar que el evento usa el cambio de velocidad GPS.
-- Esperar a recuperar 25 km/h y simular posible accidente. Mostrar “¿Estás bien?” y la cuenta regresiva. Aclarar que la alerta es local.
-- Finalizar, abrir el resumen y regresar al historial. Los recorridos simulados están identificados.
-- Mostrar una prueba de sensores reales en un teléfono físico, con el dispositivo quieto y GPS disponible.
+- Presentar cómo los sensores se convierten en señales comprensibles durante un recorrido.
+- Abrir Expo Go en un teléfono físico, elegir vehículo, autorizar los permisos y calibrar.
+- Iniciar y mostrar las lecturas de aceleración, inclinación, rotación, presión y dirección. Mover suavemente el teléfono para comprobar la actualización automática.
+- Probar GPS al aire libre y explicar que la velocidad y la altitud dependen de señal válida.
+- Consultar las reglas del índice de riesgo. No provocar accidentes ni maniobras peligrosas para demostrar eventos.
+- Finalizar y mostrar resumen e historial. Cerrar y abrir de nuevo la app para comprobar persistencia.
+- La alerta de accidente se explica con sus reglas y pruebas unitarias; ya no existe un botón para generarla artificialmente.
 
 ## Alcance de la entrega
 
@@ -58,8 +58,8 @@ npx expo-doctor
 npx expo export --platform android --platform ios --output-dir .expo/export
 ```
 
-Además de estas verificaciones, probar en Expo Go compatible con SDK 57 en iPhone y Android. El emulador y la vista web sirven para revisar pantallas y demostración; no verifican las lecturas físicas de sensores.
+Además de estas verificaciones, probar en Expo Go compatible con SDK 57 en iPhone y Android. El emulador y la vista web sirven para revisar pantallas; no verifican las lecturas físicas de sensores. La aplicación no sustituye los sensores ausentes por datos simulados.
 
 La vista web utiliza almacenamiento local del navegador y sirve para revisión visual. No modifica el almacenamiento SQLite de los teléfonos.
 
-Revisión visual realizada en la vista web a 320 × 640 y 390 × 844: inicio, calibración, monitoreo, alerta, resumen e historial. Se comprobó el bloqueo de inicio antes de calibrar, la cuenta regresiva de 10 segundos, el guardado y la persistencia tras recargar. Estas comprobaciones no validan sensores físicos ni persistencia SQLite en un teléfono.
+La revisión visual anterior incluyó el modo de demostración, eliminado por solicitud del usuario. La versión actual requiere una prueba en un teléfono físico para confirmar sus sensores; las verificaciones automáticas comprueban reglas y caducidad de lecturas sin mostrar datos de prueba al usuario.
