@@ -37,7 +37,15 @@
           "locationWhenInUsePermission": "RoadGuard utiliza tu ubicación durante el viaje para medir velocidad y distancia."
         }
       ],
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "RoadGuard utiliza la foto que elijas para personalizar tu perfil local.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
     ],
     "scheme": "roadguard"
   }

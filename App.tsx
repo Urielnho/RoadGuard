@@ -5,10 +5,12 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useKeepAwake } from 'expo-keep-awake';
 import { distanceBetween, emptyReading, evaluate, Reading, RiskEvent, riskLabel, riskScore, Trip, Vehicle, vehicles } from './src/domain';
-import { loadTrips, saveTrip } from './src/storage';
+import { loadPreferences, savePreferences, loadTrips, saveTrip } from './src/storage';
 import { useSensors } from './src/useSensors';
-import { Button, Card, colors, Disclosure, Metric, s, ValueRow } from './src/ui';
+import { AccentContext, Button, Card, colors, Disclosure, Metric, s, ValueRow } from './src/ui';
 import { Premium } from './src/Premium';
+import { accents, defaultPreferences, Preferences } from './src/premiumDomain';
+import { ProfileAvatar } from './src/ProfileAvatar';
 
 type Page = 'home' | 'prepare' | 'monitor' | 'history' | 'detail' | 'premium';
 const ScreenContext = createContext<React.ReactNode>(null);
@@ -21,6 +23,10 @@ function RoadGuard() {
   const route = pathname.slice(1);
   const page: Page = ['home', 'prepare', 'monitor', 'history', 'detail', 'premium'].includes(route) ? route as Page : 'home';
   const setPage = useCallback((next: Page) => router.replace(`/${next}`), []);
+  const [preferences, setPreferences] = useState(defaultPreferences);
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const palette = preferences.premiumDemo ? accents[preferences.accent] : accents.green;
+  async function changePreferences(next: Preferences) { await savePreferences(next); setPreferences(next); }
   const [vehicle, setVehicle] = useState<Vehicle>('auto');
   const [calibrated, setCalibrated] = useState(false);
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -33,6 +39,7 @@ function RoadGuard() {
   const [distance, setDistance] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
+  useEffect(() => { loadPreferences().then(setPreferences).catch(() => setNotice('No se pudo abrir tu personalización.')).finally(() => setPreferencesReady(true)); }, []);
   const [about, setAbout] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const session = useRef<{ start: number; readings: Reading[]; events: RiskEvent[]; scores: number[]; distance: number | null } | null>(null);
@@ -114,29 +121,30 @@ function RoadGuard() {
       <Text style={s.muted}>{event.reason}</Text>
     </View>
   ));
-  return <SafeAreaView style={s.safe}>
+  return <AccentContext.Provider value={palette}><SafeAreaView style={s.safe}>
     <StatusBar style="dark" />
     {page === 'monitor' && <Awake />}
     <View style={s.header}>
-      <View style={s.brandRow}><View style={s.brandMark}><View style={s.lane} /><View style={s.lane} /></View><Text style={s.brand}>RoadGuard</Text></View>
+      <View style={s.brandRow}><View style={[s.brandMark, { borderColor: palette.color }]}><View style={[s.lane, { backgroundColor: palette.color }]} /><View style={[s.lane, { backgroundColor: palette.color }]} /></View><Text style={s.brand}>RoadGuard</Text></View>
       <Pressable accessibilityRole="button" accessibilityLabel="Acerca de RoadGuard" onPress={() => setAbout(true)} style={s.headerAction}><Text style={s.headerLink}>Acerca de</Text></Pressable>
     </View>
     <ScreenContext.Provider value={<ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
       {!!notice && <Text accessibilityRole="alert" style={s.notice}>{notice}</Text>}
       {page === 'home' && <>
+        {preferences.premiumDemo && <View style={[s.row, { justifyContent: 'flex-start', gap: 14 }]}><ProfileAvatar preferences={preferences} /><View style={{ flex: 1 }}><Text style={s.title}>{preferences.displayName || 'Tu RoadGuard'}</Text><Text style={s.muted}>Premium · Demo</Text></View></View>}
         <View style={s.pageHeading}><Text style={s.eyebrow}>Tu próximo recorrido</Text><Text style={s.hero}>Nuevo viaje</Text><Text style={s.description}>Elige tu vehículo y comienza cuando estés listo.</Text></View>
         <View style={s.stacked}><Text style={s.caption}>Vehículo</Text><View style={s.vehicleGroup}>
-          {(Object.keys(vehicles) as Vehicle[]).map(key => <Pressable accessibilityRole="radio" accessibilityLabel={vehicles[key].name} accessibilityState={{ checked: vehicle === key }} aria-checked={vehicle === key} key={key} onPress={() => setVehicle(key)} style={({ pressed }) => [s.vehicle, vehicle === key && s.vehicleSelected, pressed && { opacity: 0.7 }]}>
-            <Text style={s.vehicleText}>{vehicles[key].name}</Text><View style={[s.selection, vehicle === key && s.selectionActive]}>{vehicle === key && <View style={s.selectionDot} />}</View>
+          {(Object.keys(vehicles) as Vehicle[]).map(key => <Pressable accessibilityRole="radio" accessibilityLabel={vehicles[key].name} accessibilityState={{ checked: vehicle === key }} aria-checked={vehicle === key} key={key} onPress={() => setVehicle(key)} style={({ pressed }) => [s.vehicle, vehicle === key && [s.vehicleSelected, { borderColor: palette.color, backgroundColor: palette.soft }], pressed && { opacity: 0.7 }]}>
+            <View style={{ flex: 1 }}><Text style={s.vehicleText}>{vehicles[key].name}</Text>{preferences.premiumDemo && !!preferences.vehicleNames[key] && <Text style={s.muted}>{preferences.vehicleNames[key]}</Text>}</View><View style={[s.selection, vehicle === key && s.selectionActive]}>{vehicle === key && <View style={s.selectionDot} />}</View>
           </Pressable>)}
         </View></View>
         <Button title="Preparar viaje" onPress={() => { setCalibrated(false); setNotice(''); setPage('prepare'); }} />
         <Card><Text style={s.caption}>Tus recorridos</Text><View style={s.row}><Metric label="Viajes" value={`${realTrips.length}`} unit="completados" /><View style={s.metricDivider} /><Metric label="Distancia" value={(realTrips.reduce((total, trip) => total + (trip.distance ?? 0), 0) / 1000).toFixed(2)} unit="km registrados" /></View></Card>
-        <Card><View style={s.row}><Text style={s.title}>RoadGuard Premium</Text><Text style={s.badge}>Próximamente</Text></View><Text style={s.description}>Descubre el plan con análisis, alertas y reportes completos.</Text><Button title="Hazte Premium" secondary onPress={() => setPage('premium')} /></Card>
+        <Card><View style={s.row}><Text style={s.title}>RoadGuard Premium</Text><Text style={s.badge}>{preferences.premiumDemo ? 'Demo activa' : 'Pruébalo'}</Text></View><Text style={s.description}>Personaliza tu perfil y conoce mejor tus viajes con análisis y reportes.</Text><Button title={preferences.premiumDemo ? "Abrir mi Premium" : "Hazte Premium"} secondary onPress={() => setPage('premium')} /></Card>
         <Text style={s.footnote}>Mantén la app abierta durante el viaje.</Text>
       </>}
       {page === 'prepare' && <>
-        <View style={s.pageHeading}><Text style={s.eyebrow}>{vehicles[vehicle].name}</Text><Text style={s.hero}>Antes de salir</Text><Text style={s.description}>Fija el teléfono y déjalo quieto unos segundos.</Text></View>
+        <View style={s.pageHeading}><Text style={s.eyebrow}>{preferences.premiumDemo && preferences.vehicleNames[vehicle] ? preferences.vehicleNames[vehicle] : vehicles[vehicle].name}</Text><Text style={s.hero}>Antes de salir</Text><Text style={s.description}>Fija el teléfono y déjalo quieto unos segundos.</Text></View>
         <Card><View style={s.row}><Text style={s.title}>Posición del teléfono</Text>{calibrated && <Text style={s.badge}>Calibrado</Text>}</View><Text style={s.description}>Esta posición será la referencia para medir la inclinación.</Text>
           <Button title={calibrated ? 'Volver a calibrar' : 'Calibrar posición'} secondary={calibrated} onPress={() => { if (sensors.calibrate()) setCalibrated(true); else Alert.alert('Esperando sensor', 'Aún no hay lecturas del acelerómetro. Revisa los permisos de movimiento.'); }} />
         </Card>
@@ -194,11 +202,11 @@ function RoadGuard() {
         <Button title="Ver todos mis viajes" secondary onPress={() => setPage('history')} />
       </>}
       {page === 'detail' && !selected && <><Text style={s.hero}>Detalle del viaje</Text><Text style={s.description}>Selecciona un recorrido desde tu historial.</Text><Button title="Abrir historial" onPress={() => setPage('history')} /></>}
-      {page === 'premium' && <Premium />}
+      {page === 'premium' && (preferencesReady ? <Premium preferences={preferences} trips={trips} onChange={changePreferences} /> : <Text style={s.description}>Cargando tu espacio…</Text>)}
     </ScrollView>}><Slot /></ScreenContext.Provider>
     {page !== 'monitor' && <View style={s.nav}>{(['home', 'history', 'premium'] as const).map(destination => {
       const active = destination === 'home' ? page === 'home' || page === 'prepare' : destination === 'history' ? page === 'history' || page === 'detail' : page === 'premium';
-      return <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} aria-selected={active} key={destination} onPress={() => setPage(destination)} style={[s.navItem, active && s.navItemActive]}><Text style={[s.navText, active && s.navTextActive]}>{destination === 'home' ? 'Inicio' : destination === 'history' ? 'Historial' : 'Premium'}</Text></Pressable>;
+      return <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} aria-selected={active} key={destination} onPress={() => setPage(destination)} style={[s.navItem, active && [s.navItemActive, { backgroundColor: palette.soft }]]}><Text style={[s.navText, active && [s.navTextActive, { color: palette.color }]]}>{destination === 'home' ? 'Inicio' : destination === 'history' ? 'Historial' : 'Premium'}</Text></Pressable>;
     })}</View>}
     <Modal visible={countdown !== null} transparent animationType="fade" onRequestClose={() => {}}>
       <View style={s.overlay}><View style={s.alertCard}><ScrollView contentContainerStyle={s.modalContent}>
@@ -217,6 +225,6 @@ function RoadGuard() {
         <Text style={s.footnote}>Los viajes se guardan al finalizar. Las lecturas provienen exclusivamente de los sensores del dispositivo.</Text><Button title="Entendido" onPress={() => setAbout(false)} />
       </ScrollView></View></View>
     </Modal>
-  </SafeAreaView>;
+  </SafeAreaView></AccentContext.Provider>;
 }
 export default function App() { return <SafeAreaProvider><RoadGuard /></SafeAreaProvider>; }

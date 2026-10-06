@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { accents } from './premiumDomain';
+export const AccentContext = createContext(accents.green);
 
 export const colors = {
   background: '#F7F8FA', surface: '#FFFFFF', ink: '#18252B', muted: '#64747B',
@@ -9,9 +11,10 @@ export const colors = {
 export function Button({ title, onPress, secondary = false, disabled = false }: {
   title: string; onPress: () => void; secondary?: boolean; disabled?: boolean;
 }) {
+  const accent = useContext(AccentContext);
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
-      style={({ pressed }) => [s.button, secondary && s.secondary, (pressed || disabled) && { opacity: 0.5 }]}>
+      style={({ pressed }) => [s.button, { backgroundColor: accent.color }, secondary && s.secondary, (pressed || disabled) && { opacity: 0.5 }]}>
       <Text style={[s.buttonText, secondary && s.secondaryText]}>{title}</Text>
     </Pressable>
   );
@@ -101,4 +104,8 @@ export const s = StyleSheet.create({
   premiumBenefit: { flexDirection: 'row', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.line },
   premiumNumber: { color: colors.accent, fontSize: 12, fontWeight: '600', paddingTop: 3 },
   modalContent: { gap: 18 },
+  input: { minHeight: 48, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, color: colors.ink, fontSize: 14, backgroundColor: colors.surface },
+  avatar: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarText: { fontSize: 22, fontWeight: '600' },
+  swatch: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
 });

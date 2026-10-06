@@ -2,9 +2,13 @@
 
 ## Alcance actual
 
-Pantalla informativa accesible desde “Hazte Premium” en Inicio y la pestaña Premium. Plan mensual de referencia: **$49.99 MXN / mes**. Beneficios previstos: análisis avanzado, detección avanzada de señales de posibles accidentes, notificaciones y contactos, historial y reportes.
+Pantalla accesible desde “Hazte Premium” en Inicio y la pestaña Premium. Plan mensual de referencia: **$49.99 MXN / mes**. El pago es una simulación local solicitada para el examen: elegir tarjeta o billetera demo, confirmar y ver la activación. No se piden datos bancarios ni se conecta con Stripe, Apple Pay o Google Pay.
 
-Los beneficios se presentan como próximos. No hay pago, activación ficticia de suscripción, restricciones nuevas del plan gratuito ni datos simulados. No se añadió login ni registro: por instrucción del usuario, se implementarán al final.
+La activación desbloquea foto de galería, nombre de perfil, tres colores de acento, nombres por vehículo, estadísticas de viajes guardados, comparación del riesgo de los dos últimos viajes con datos, eventos frecuentes, recomendaciones y reporte compartible. La foto se copia al almacenamiento privado en Android/iOS; las preferencias y activación se guardan en SQLite. La vista web usa almacenamiento local del navegador. Se puede volver al plan gratuito conservando los datos. No hay login: se implementará al final.
+
+Solo se simula el pago. Los sensores siguen usando lecturas reales. Las estadísticas no incluyen viajes simulados; muestran datos ausentes con “—”. El riesgo agregado es la media de las medias por viaje, no una probabilidad de accidente. Alertas a contactos y notificaciones push siguen pendientes.
+
+Para probar: Premium → Probar Premium → elegir método demo → Confirmar pago simulado → Explorar mi Premium. Cambiar nombre, foto, color y vehículo; volver a Inicio y reiniciar para comprobar persistencia. Completar viajes reales para habilitar estadísticas y compartir reportes. La selección de foto y la hoja de compartir requieren verificación en un teléfono físico.
 
 ## Pago propuesto para el examen
 

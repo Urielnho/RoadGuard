@@ -28,7 +28,7 @@ Monitorear un viaje en automóvil, motocicleta o bicicleta y mostrar señales de
 | Base de datos | SQLite en Android e iOS: viajes, lecturas y eventos persistidos al finalizar |
 | Datos en vivo | Lecturas exclusivamente reales; los datos ausentes o caducados aparecen como “—” |
 | Interfaz | Tema claro, navegación Inicio/Historial/Premium, estados vacíos y detalles desplegables |
-| Premium | Apartado informativo con plan mensual y beneficios previstos; sin login ni cobros |
+| Premium | Pago simulado que activa personalización, análisis de viajes reales y reportes compartibles; sin login ni cobros |
 
 ## Guion para exposición (3–5 minutos)
 
@@ -44,7 +44,7 @@ Monitorear un viaje en automóvil, motocicleta o bicicleta y mostrar señales de
 
 Esta versión funciona en primer plano. Los umbrales son académicos, no están validados como un sistema de seguridad y no representan porcentajes de probabilidad. No requiere sensores externos ni un servidor.
 
-No incluye inicio de sesión, sincronización en la nube, contacto ni envío de emergencia, notificaciones push, activación de Premium, pagos, reportes exportables, cálculo de pendientes ni detección específica de caídas. El apartado Premium es informativo y anuncia sus beneficios como próximos. La presentación visual pulida no cambia ese alcance funcional.
+No incluye inicio de sesión, sincronización en la nube, contacto ni envío de emergencia, notificaciones push, pagos reales, cálculo de pendientes ni detección específica de caídas. Premium usa una activación local de demostración. Sus estadísticas y reportes sí se calculan con viajes reales guardados. Ver `PREMIUM.md` para probarlo.
 
 Los sensores pueden faltar según el dispositivo. El barómetro muestra presión; la altitud mostrada es del GPS. Los recorridos se almacenan localmente sin cifrado adicional. Cerrar la app antes de finalizar puede perder el viaje activo.
 
