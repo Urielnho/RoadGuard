@@ -28,6 +28,7 @@ Si Expo Go indica una versión incompatible, revisa su SDK antes de cambiar depe
 - Cuenta regresiva de 10 segundos para posible accidente experimental.
 - Resumen e historial persistente en SQLite, incluyendo lecturas y eventos.
 - Datos exclusivamente reales: sin generadores de datos ni botones de simulación. El historial omite recorridos simulados de versiones anteriores.
+- Apartado “Hazte Premium” con precio mensual de referencia y beneficios previstos. Sin login ni cobros; [propuesta de integración con Stripe](docs/PREMIUM.md).
 
 ## Prueba con sensores reales
 

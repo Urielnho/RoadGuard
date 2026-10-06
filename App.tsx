@@ -8,8 +8,9 @@ import { distanceBetween, emptyReading, evaluate, Reading, RiskEvent, riskLabel,
 import { loadTrips, saveTrip } from './src/storage';
 import { useSensors } from './src/useSensors';
 import { Button, Card, colors, Disclosure, Metric, s, ValueRow } from './src/ui';
+import { Premium } from './src/Premium';
 
-type Page = 'home' | 'prepare' | 'monitor' | 'history' | 'detail';
+type Page = 'home' | 'prepare' | 'monitor' | 'history' | 'detail' | 'premium';
 const ScreenContext = createContext<React.ReactNode>(null);
 export function RoadGuardScreen() { return useContext(ScreenContext); }
 const fmt = (n: number | null, decimals = 1) => n === null ? '—' : n.toFixed(decimals);
@@ -18,7 +19,7 @@ function Awake() { useKeepAwake(); return null; }
 function RoadGuard() {
   const pathname = usePathname();
   const route = pathname.slice(1);
-  const page: Page = ['home', 'prepare', 'monitor', 'history', 'detail'].includes(route) ? route as Page : 'home';
+  const page: Page = ['home', 'prepare', 'monitor', 'history', 'detail', 'premium'].includes(route) ? route as Page : 'home';
   const setPage = useCallback((next: Page) => router.replace(`/${next}`), []);
   const [vehicle, setVehicle] = useState<Vehicle>('auto');
   const [calibrated, setCalibrated] = useState(false);
@@ -131,6 +132,7 @@ function RoadGuard() {
         </View></View>
         <Button title="Preparar viaje" onPress={() => { setCalibrated(false); setNotice(''); setPage('prepare'); }} />
         <Card><Text style={s.caption}>Tus recorridos</Text><View style={s.row}><Metric label="Viajes" value={`${realTrips.length}`} unit="completados" /><View style={s.metricDivider} /><Metric label="Distancia" value={(realTrips.reduce((total, trip) => total + (trip.distance ?? 0), 0) / 1000).toFixed(2)} unit="km registrados" /></View></Card>
+        <Card><View style={s.row}><Text style={s.title}>RoadGuard Premium</Text><Text style={s.badge}>Próximamente</Text></View><Text style={s.description}>Descubre el plan con análisis, alertas y reportes completos.</Text><Button title="Hazte Premium" secondary onPress={() => setPage('premium')} /></Card>
         <Text style={s.footnote}>Mantén la app abierta durante el viaje.</Text>
       </>}
       {page === 'prepare' && <>
@@ -192,10 +194,11 @@ function RoadGuard() {
         <Button title="Ver todos mis viajes" secondary onPress={() => setPage('history')} />
       </>}
       {page === 'detail' && !selected && <><Text style={s.hero}>Detalle del viaje</Text><Text style={s.description}>Selecciona un recorrido desde tu historial.</Text><Button title="Abrir historial" onPress={() => setPage('history')} /></>}
+      {page === 'premium' && <Premium />}
     </ScrollView>}><Slot /></ScreenContext.Provider>
-    {page !== 'monitor' && <View style={s.nav}>{(['home', 'history'] as const).map(destination => {
-      const active = destination === 'home' ? page === 'home' || page === 'prepare' : page === 'history' || page === 'detail';
-      return <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} aria-selected={active} key={destination} onPress={() => setPage(destination)} style={[s.navItem, active && s.navItemActive]}><Text style={[s.navText, active && s.navTextActive]}>{destination === 'home' ? 'Inicio' : 'Historial'}</Text></Pressable>;
+    {page !== 'monitor' && <View style={s.nav}>{(['home', 'history', 'premium'] as const).map(destination => {
+      const active = destination === 'home' ? page === 'home' || page === 'prepare' : destination === 'history' ? page === 'history' || page === 'detail' : page === 'premium';
+      return <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} aria-selected={active} key={destination} onPress={() => setPage(destination)} style={[s.navItem, active && s.navItemActive]}><Text style={[s.navText, active && s.navTextActive]}>{destination === 'home' ? 'Inicio' : destination === 'history' ? 'Historial' : 'Premium'}</Text></Pressable>;
     })}</View>}
     <Modal visible={countdown !== null} transparent animationType="fade" onRequestClose={() => {}}>
       <View style={s.overlay}><View style={s.alertCard}><ScrollView contentContainerStyle={s.modalContent}>

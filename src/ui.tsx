@@ -96,5 +96,9 @@ export const s = StyleSheet.create({
   navTextActive: { color: colors.accent, fontWeight: '600' },
   overlay: { flex: 1, backgroundColor: '#14252B66', padding: 24, justifyContent: 'center', alignItems: 'center' },
   alertCard: { width: '100%', maxWidth: 420, maxHeight: '90%', backgroundColor: colors.surface, borderRadius: 20, padding: 24 },
+  premiumPrice: { color: colors.ink, fontSize: 38, fontWeight: '600', letterSpacing: -1 },
+  premiumCurrency: { color: colors.muted, fontSize: 14, fontWeight: '400', letterSpacing: 0 },
+  premiumBenefit: { flexDirection: 'row', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.line },
+  premiumNumber: { color: colors.accent, fontSize: 12, fontWeight: '600', paddingTop: 3 },
   modalContent: { gap: 18 },
 });
