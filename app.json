@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "RoadGuard",
+    "slug": "roadguard",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.urielnho.roadguard"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.urielnho.roadguard"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      [
+        "expo-sensors",
+        {
+          "motionPermission": "RoadGuard utiliza el movimiento del teléfono para identificar señales de riesgo durante tu viaje."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "RoadGuard utiliza tu ubicación durante el viaje para medir velocidad y distancia."
+        }
+      ],
+      "expo-router"
+    ],
+    "scheme": "roadguard"
+  }
+}
