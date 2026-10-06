@@ -2,7 +2,7 @@
 
 Repositorio: https://github.com/Urielnho/RoadGuard (privado), rama `main`.
 
-Primera entrega: Expo SDK 57, TypeScript, sensores reales en primer plano, calibración, reglas académicas, alerta visual local, SQLite, simulación explícita, resumen e historial. No se implementó Kotlin porque se acordó compartir la app con Expo Go en iPhone y Android.
+Versión académica 1.0: Expo SDK 57, TypeScript, sensores reales en primer plano, calibración, reglas académicas, alerta visual local, SQLite, simulación explícita, resumen e historial. Interfaz minimalista clara con acento verde, marca propia, navegación inferior y paneles desplegables para detalles. Guía de entrega en `docs/ENTREGA.md`. No se implementó Kotlin porque se acordó compartir la app con Expo Go en iPhone y Android.
 
 El siguiente paso con el usuario es abrir el QR en su iPhone y ejecutar el flujo de demostración del README; después validar sensores en un teléfono físico. Revisar la versión instalada de Expo Go si aparece incompatibilidad de SDK. Las verificaciones automatizadas no sustituyen pruebas físicas.
 

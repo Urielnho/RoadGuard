@@ -1,6 +1,8 @@
 # RoadGuard
 
-Prototipo académico de monitoreo de riesgo vial con React Native, Expo y TypeScript. Android e iPhone comparten el proyecto. Repositorio privado: https://github.com/Urielnho/RoadGuard.
+Aplicación académica de monitoreo de riesgo vial con React Native, Expo y TypeScript. Android e iPhone comparten el proyecto. Interfaz minimalista en español, con seguimiento de viajes, reglas explicables e historial local. Repositorio privado: https://github.com/Urielnho/RoadGuard.
+
+La versión 1.0 cubre el flujo de viaje completo. Consulta [la guía de entrega](docs/ENTREGA.md) para presentar el proyecto y distinguir las funciones implementadas de las integraciones pendientes.
 
 ## Ejecutar
 
@@ -37,9 +39,13 @@ Si Expo Go indica una versión incompatible, revisa su SDK antes de cambiar depe
 6. Finaliza y revisa el historial. Cierra y vuelve a abrir la aplicación para comprobar persistencia.
 7. Desactiva la simulación para probar sensores reales, quieto y al aire libre para obtener GPS. No provoques accidentes o maniobras peligrosas.
 
+Los escenarios están en “Probar escenarios”, dentro del viaje. “Lecturas de sensores” y “Explicación del riesgo” permiten consultar los detalles sin saturar la pantalla. Las restricciones del proyecto están accesibles desde “Acerca de”.
+
+Para revisar la interfaz en el navegador: `npm run web`. Esa vista usa almacenamiento local del navegador; Android e iOS usan SQLite. Las pruebas de sensores de la entrega deben hacerse en dispositivos físicos.
+
 ## Arquitectura y reglas
 
-`src/app/`: rutas de Expo Router. `App.tsx`: controlador persistente del viaje y presentación compartida mediante contexto. `src/useSensors.ts`: permisos, suscripciones y normalización. `src/domain.ts`: tipos, reglas y distancia. `src/storage.ts`: SQLite. `tests/domain.test.ts`: pruebas del motor de riesgo.
+`src/app/`: rutas de Expo Router. `App.tsx`: controlador persistente del viaje y presentación compartida mediante contexto. `src/ui.tsx`: tema visual y componentes reutilizables. `src/useSensors.ts`: permisos, suscripciones y normalización. `src/domain.ts`: tipos, reglas y distancia. `src/storage.ts`: SQLite en móviles. `src/storage.web.ts`: persistencia de la vista de revisión web. `tests/domain.test.ts`: pruebas del motor de riesgo.
 
 Los umbrales son académicos y no están validados como sistema de seguridad ni representan límites legales. El riesgo es la suma de reglas activas, limitada a 100: velocidad +35, frenada +30, aceleración GPS +25, movimiento +20, giro del teléfono +20, inclinación +20, combinación de posible accidente +80. Rangos: 0–39 bajo, 40–69 moderado, 70–100 alto. Eventos del mismo tipo se guardan como máximo cada 10 segundos para evitar duplicados; la puntuación sí se recalcula cada segundo.
 
