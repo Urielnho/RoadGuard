@@ -43,3 +43,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+/server/firebase-service-account.json
+
+/server/tools/cloudflared.exe
