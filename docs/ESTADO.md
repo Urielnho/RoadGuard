@@ -1,5 +1,7 @@
 # Estado de trabajo — 8 de octubre de 2026
 
+> Actualización: servidor Stripe de prueba y push implementado, registro GPS en segundo plano y recuperación local añadidos. Clave Stripe y acceso Firebase Admin comprobados; reglas de suscripción publicadas y Android registrado en Firebase. Ver [guía de puesta en marcha](STRIPE-PUSH-SEGUNDO-PLANO.md). El estado anterior que sigue ya no describe el pago ni el registro actuales.
+
 Repositorio: https://github.com/Urielnho/RoadGuard (público), rama `main`. El README incluye la guía para continuar el desarrollo.
 
 Versión académica 1.0: Expo SDK 57, TypeScript, sensores reales en primer plano, calibración, reglas académicas, alerta visual local, SQLite, resumen e historial. Interfaz minimalista clara con acento verde, marca propia, navegación inferior y paneles desplegables para detalles. Guía de entrega en `docs/ENTREGA.md`. No se implementó Kotlin porque se acordó compartir la app con Expo Go en iPhone y Android.

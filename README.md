@@ -1,12 +1,16 @@
 # RoadGuard
 
+> **Actualización:** se preparó Stripe en modo de prueba con un servidor Node externo, registro push y GPS en segundo plano con recuperación local. Falta configurar/desplegar el servidor, publicar las nuevas reglas, vincular EAS/FCM y validar una compilación en un teléfono. Consulta [Stripe, push y segundo plano](docs/STRIPE-PUSH-SEGUNDO-PLANO.md) antes de usar las instrucciones históricas de demostración que siguen. Expo Go no permite validar estas funciones completas. La activación Premium local anterior fue reemplazada por verificación de Stripe en el servidor.
+
+> Firebase: se implementó acceso anónimo persistente y respaldo de resúmenes de viajes en Firestore. El panel Historial escucha los últimos 20 resúmenes en tiempo real. Se requiere configurar `.env`, habilitar acceso anónimo y publicar `firestore.rules`; ver [Configurar Firebase](docs/FIREBASE.md). Las muestras y los eventos detallados siguen siendo locales. La integración aún requiere comprobación con el proyecto real y teléfonos físicos.
+
 App académica en español para monitorear viajes y mostrar señales de riesgo con sensores reales. Usa **Expo SDK 57, React Native 0.86, React 19 y TypeScript**. Android e iPhone comparten este proyecto; no es una app Kotlin independiente.
 
 Repositorio público: [Urielnho/RoadGuard](https://github.com/Urielnho/RoadGuard). Guía de continuidad actualizada el **8 de octubre de 2026**.
 
 ## Empezar en otra computadora
 
-Necesitas Git, **Node.js 24**, npm y Expo Go compatible con SDK 57. La versión actual no necesita claves, Stripe, cuentas ni variables de entorno.
+Necesitas Git, **Node.js 24**, npm y una compilación de desarrollo para push y GPS en segundo plano. Para Firebase y el servidor, completa las variables de `.env.example` en un archivo `.env`. Sin ellas funciona el almacenamiento local. Stripe se ejecuta en modo de prueba mediante el servidor externo en `server/`.
 
 ```sh
 git clone https://github.com/Urielnho/RoadGuard.git
@@ -29,10 +33,10 @@ Si la red bloquea la conexión: `npx expo start --tunnel`. Para limpiar la cach�
 ## Decisiones que debes respetar
 
 - **Sensores y viajes exclusivamente reales.** No agregar números aleatorios ni recorridos ficticios a la interfaz. Datos ausentes o caducados usan `null` y muestran “—”; un cero recibido del sensor sí es válido.
-- **Solo el pago Premium se simula**, por solicitud del usuario. Mantenerlo marcado como demo, sin cargos ni datos bancarios.
+- **Stripe solo en modo de prueba.** No habilitar cobros reales ni conceder Premium desde preferencias locales.
 - **Login y registro se harán al final.** El perfil actual es personalización local, no una cuenta autenticada.
 - Mantener diseño minimalista, español y prioridad a teléfonos.
-- Stripe es una integración futura: todavía no hay backend de pagos ni suscripciones reales.
+- El servidor de Stripe y push está preparado en `server/`; debe configurarse y desplegarse para utilizarlo.
 - Usar Expo Router y seguir [AGENTS.md](AGENTS.md).
 
 ## Estado funcional
@@ -44,13 +48,13 @@ Si la red bloquea la conexión: `npx expo start --tunnel`. Para limpiar la cach�
 | Riesgo | Índice 0–100, reglas explicadas y eventos registrados |
 | Posible accidente | Heurística experimental, cuenta regresiva de 10 segundos y alerta local |
 | Historial | Viajes, muestras y eventos guardados en SQLite al finalizar |
-| Premium demo | Tarjeta/billetera ficticia, confirmación y activación persistente sin cobro |
+| Premium | Checkout de Stripe en modo de prueba y activación verificada por webhook; requiere servidor configurado |
 | Personalización | Foto de galería, nombre visible, tres colores y nombres por vehículo |
 | Análisis Premium | Estadísticas reales, comparación de riesgo, eventos frecuentes y recomendaciones |
 | Reporte | Resumen de texto mediante la hoja de compartir del dispositivo |
 | Gestión del plan | Volver a gratuito conservando viajes y preferencias |
 
-Los viajes simulados de versiones antiguas se excluyen del historial y análisis. **Foto y hoja de compartir están implementadas, pero falta probarlas en teléfonos físicos.** No hay envío a contactos, llamadas de emergencia ni notificaciones push.
+Los viajes simulados de versiones antiguas se excluyen del historial y análisis. **Foto y hoja de compartir están implementadas, pero falta probarlas en teléfonos físicos.** Push está preparado, pendiente de credenciales y prueba física. No hay envío a contactos ni llamadas de emergencia.
 
 ## Pruebas manuales para retomar
 
@@ -67,12 +71,12 @@ En un navegador sin sensores puede ser imposible calibrar. Es lo esperado; no a�
 
 ### Premium
 
-1. **Premium → Probar Premium → Cancelar**: comprobar que no activa el plan.
-2. Elegir tarjeta/billetera demo, confirmar y abrir **Explorar mi Premium**.
+1. **Premium → Suscribirme con Stripe**: cancelar Checkout y comprobar que no activa el plan.
+2. Completar un pago de prueba y verificar que solo el webhook activa Premium.
 3. Guardar nombre, cambiar foto/color y nombrar un vehículo; revisar Inicio.
 4. Reiniciar y comprobar persistencia de activación, foto y preferencias.
 5. Sin viajes deben aparecer estados vacíos. Con viajes reales, comprobar estadísticas, comparación y compartir reporte.
-6. **Administrar demostración → Volver al plan gratuito**: ocultar beneficios sin perder viajes. La personalización debe conservarse para una nueva activación.
+6. **Administrar suscripción**: cancelar desde el portal de Stripe y comprobar que se conserva el acceso hasta terminar el período confirmado. La personalización y los viajes permanecen locales.
 
 ## Mapa del código
 
@@ -86,7 +90,7 @@ En un navegador sin sensores puede ser imposible calibrar. Es lo esperado; no a�
 | `src/storage.ts` | SQLite móvil: `roadguard.db`, tablas `trips` y `preferences` |
 | `src/storage.web.ts` | Persistencia de revisión web en `localStorage` |
 | `src/ui.tsx` | Componentes, estilos y contexto del color de acento |
-| `src/Premium.tsx` | Pago demo, personalización, estadísticas y reporte |
+| `src/Premium.tsx` | Checkout/portal de Stripe, personalización, estadísticas y reporte |
 | `src/premiumDomain.ts` | Preferencias, colores, análisis y recomendaciones |
 | `src/ProfileAvatar.tsx` | Foto o iniciales del perfil |
 | `src/avatar.ts` / `src/avatar.web.ts` | Selección y persistencia de imagen por plataforma |
@@ -98,9 +102,9 @@ Al separar `App.tsx` en componentes, mantener el viaje activo fuera de las panta
 
 ## Datos y límites técnicos
 
-**No hay servidor ni base de datos en la nube.** Android/iOS usan SQLite; web usa almacenamiento del navegador. Los datos no se sincronizan entre dispositivos. La foto móvil se copia al almacenamiento privado de la app. Preferencias guarda activación demo, nombre, foto, color y nombres de vehículos.
+Android/iOS usan SQLite; web usa almacenamiento del navegador. Con Firebase configurado, los resúmenes se respaldan en `users/{uid}/trips/{tripId}`. El acceso anónimo persiste en este dispositivo; todavía no hay recuperación de cuenta ni restauración del historial en otro dispositivo. La foto, preferencias, muestras y eventos detallados siguen siendo locales. Premium se verifica con Firestore y Stripe.
 
-Los viajes se guardan al finalizar; un cierre forzado pierde el viaje activo. En segundo plano se omiten muestras y no se garantiza monitoreo. La duración incluye pausas; el riesgo promedio usa muestras monitoreadas. Los recorridos no tienen cifrado adicional.
+Los viajes se guardan al finalizar y se mantienen muestras locales de recuperación durante el recorrido. El GPS en segundo plano es opcional y requiere una compilación propia y permisos; el movimiento requiere primer plano. Un cierre forzado puede detener el registro. La duración incluye pausas; el riesgo promedio usa muestras monitoreadas. Los recorridos no tienen cifrado adicional.
 
 La pantalla se actualiza cada segundo; movimiento solicita lecturas cada 100 ms. Movimiento/dirección caducan tras 3 segundos, GPS tras 5 y presión tras 10. GPS con precisión peor que 35 m se descarta. Distancia omite desplazamientos menores de 3 m y saltos superiores a 60 m/s; puede subestimar recorridos lentos.
 
@@ -141,7 +145,7 @@ npm test
 npx expo-doctor
 ```
 
-La revisión anterior pasó TypeScript, lint, **9 pruebas**, Expo Doctor y exportación Android/iOS/web. Se revisaron pago demo, personalización y persistencia en navegador. La validación física sigue pendiente.
+La revisión de esta integración pasó TypeScript, lint, **16 pruebas de app y 4 del servidor**, y exportación Android/iOS/web. La clave Stripe de prueba se verificó mediante una consulta sin cargos. El flujo completo de pago, la entrega push y el registro GPS requieren configuración externa y validación física; todavía no se ha construido un APK.
 
 Instalar módulos con `npx expo install <paquete>` y consultar documentación de SDK 57 antes de cambiar APIs. Si un módulo nativo no viene en Expo Go, necesitará compilación de desarrollo. Configurar permisos/plugins en `app.json`; no editar manualmente carpetas nativas generadas. Seguir [AGENTS.md](AGENTS.md) para compilación con EAS.
 

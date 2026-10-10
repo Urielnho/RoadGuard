@@ -1,0 +1,41 @@
+{
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyB1-oRnISOu6lGjK7FnugW7eAFsdilfeH8",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "roadguard-5c373.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "roadguard-5c373",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "roadguard-5c373.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "128043454223",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:128043454223:web:1ea3ba40d22de2e7efb87a",
+        "EXPO_PUBLIC_SCHOOL_SERVER": "true",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51Qv98oJImUrPYXNzkmwTXswm26nqnwhOWCWn90WYnk7vGJ5KFPslwhgtyFS6t7Ld8hUxNiywZE7rJA1TQWahaZXa00DxL0NU94"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyB1-oRnISOu6lGjK7FnugW7eAFsdilfeH8",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "roadguard-5c373.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "roadguard-5c373",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "roadguard-5c373.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "128043454223",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:128043454223:web:1ea3ba40d22de2e7efb87a",
+        "EXPO_PUBLIC_SCHOOL_SERVER": "true",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51Qv98oJImUrPYXNzkmwTXswm26nqnwhOWCWn90WYnk7vGJ5KFPslwhgtyFS6t7Ld8hUxNiywZE7rJA1TQWahaZXa00DxL0NU94"
+      }
+    },
+    "production": {}
+  },
+  "cli": {
+    "appVersionSource": "local"
+  }
+}

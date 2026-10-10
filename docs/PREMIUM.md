@@ -1,5 +1,7 @@
 # RoadGuard Premium
 
+> Este documento conserva el diseño anterior de demostración. La implementación vigente usa Stripe Checkout de prueba y verificación del servidor; consulta [la guía actual](STRIPE-PUSH-SEGUNDO-PLANO.md). El botón de activación local descrito abajo ya no existe.
+
 ## Alcance actual
 
 Pantalla accesible desde “Hazte Premium” en Inicio y la pestaña Premium. Plan mensual de referencia: **$49.99 MXN / mes**. El pago es una simulación local solicitada para el examen: elegir tarjeta o billetera demo, confirmar y ver la activación. No se piden datos bancarios ni se conecta con Stripe, Apple Pay o Google Pay.

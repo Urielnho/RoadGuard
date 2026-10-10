@@ -1,0 +1,25 @@
+node_modules/
+.git/
+.expo/
+.claude/
+.codex/
+.agents/
+server/
+.env
+.env.*
+dist/
+dist-premium/
+dist-firebase/
+docs/
+tests/
+scripts/
+*.log
+*.pem
+*.key
+*.p12
+*.jks
+credentials.json
+/android
+/ios
+# google-services.json contains only the Android client configuration and is
+# intentionally included for FCM. The Admin service account is under server/.

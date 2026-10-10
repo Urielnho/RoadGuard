@@ -1,10 +1,12 @@
+import { storageSuffix } from './storageScope';
 import * as SQLite from 'expo-sqlite';
 import { Trip } from './domain';
 import { defaultPreferences, Preferences } from './premiumDomain';
-let database: Promise<SQLite.SQLiteDatabase> | undefined;
+const databases = new Map<string, Promise<SQLite.SQLiteDatabase>>();
 async function db() {
-  database ??= SQLite.openDatabaseAsync('roadguard.db');
-  const connection = await database;
+  const name = 'roadguard' + await storageSuffix() + '.db';
+  if (!databases.has(name)) databases.set(name, SQLite.openDatabaseAsync(name).catch(error => { databases.delete(name); throw error; }));
+  const connection = await databases.get(name)!;
   await connection.execAsync('CREATE TABLE IF NOT EXISTS trips (id TEXT PRIMARY KEY NOT NULL, ended INTEGER NOT NULL, data TEXT NOT NULL);');
   await connection.execAsync('CREATE TABLE IF NOT EXISTS preferences (id INTEGER PRIMARY KEY NOT NULL, data TEXT NOT NULL);');
   return connection;

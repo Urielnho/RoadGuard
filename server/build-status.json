@@ -1,0 +1,40 @@
+Failed to get Git root path with `git rev-parse --show-toplevel`. Error: git rev-parse --show-toplevel exited with non-zero code: 128
+Falling back to using current working directory as project root.
+You can set `EAS_PROJECT_ROOT` environment variable to let eas-cli know where your project is located.
+{
+  "id": "e3b68bf3-f72f-4496-a94d-a9d74d83256d",
+  "status": "IN_PROGRESS",
+  "platform": "ANDROID",
+  "artifacts": {},
+  "fingerprint": {
+    "id": "01a11fe8-14b0-7add-8233-a6c76ed6de62",
+    "hash": "5cd2e87d8938c788fd192fb3c2d3a4df0296ecc0"
+  },
+  "initiatingActor": {
+    "id": "0c395b8f-549c-4bc1-ab9f-31ac2a215a79",
+    "displayName": "mandinho777"
+  },
+  "logFiles": [
+    "https://storage.googleapis.com/eas-workflows-production/logs/e46da8ca-794e-4a56-b6de-dc646bf3577c/e3b68bf3-f72f-4496-a94d-a9d74d83256d/2026-10-09T09%3A04%3A29Z-cbd2beb9-235f-4257-86d5-c8d81cbfce0d.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20261009%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261009T090846Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=9a4d3b3f8d58fc1e8083e1289ebfbea24ae45edf690a04648c736a2faf3d106e1639afa33b1714900dafd79b7431a491c94c0a2bc54574b8c897bcdf82857bbf49701a4ca481ca215b0f956f96da02c30b1d5a17bc9ac4e34366dbc17eaba4bf30a4430eea24ab0fe2b5acf1945f1f0a45f9f890cadfc25e1b407bd1ff753ba479cb750586d9d8816b8d0e9138e4811a84451306787d811024d94f57a5fe5a1aa690bdce1aad5f12c08037dd463e5fabf455b2d9bf85f661558ad39ac5c22f7a8711d797c9a0c38f6c0e7145506d6039e978e858c8af177ce70c602e84c593614b9fb1233b392ee85338143bf5fab1290751aea13d8a1379c794911a96bd424f"
+  ],
+  "app": {
+    "id": "e46da8ca-794e-4a56-b6de-dc646bf3577c",
+    "name": "roadguard",
+    "slug": "roadguard",
+    "ownerAccount": {
+      "id": "5850c9f3-ff56-4946-8e21-833249409626",
+      "name": "mandinho777"
+    }
+  },
+  "distribution": "INTERNAL",
+  "buildProfile": "preview",
+  "appIdentifier": "com.urielnho.roadguard",
+  "sdkVersion": "57.0.0",
+  "appVersion": "1.0.0",
+  "appBuildVersion": "1",
+  "priority": "NORMAL_PLUS",
+  "createdAt": "2026-10-09T09:04:25.696Z",
+  "updatedAt": "2026-10-09T09:04:33.718Z",
+  "expirationDate": "2026-10-23T09:04:25.766Z",
+  "isForIosSimulator": false
+}

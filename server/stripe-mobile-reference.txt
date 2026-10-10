@@ -1,0 +1,1608 @@
+# Crear una integración de suscripciones
+
+Crear y administrar las suscripciones para aceptar pagos recurrentes.
+
+# React Native
+
+
+Aprende a vender *subscriptions* (A Subscription represents the product details associated with the plan that your customer subscribes to. Allows you to charge the customer on a recurring basis) de precio fijo. Usarás [Payment Element para dispositivos móviles](https://docs.stripe.com/payments/accept-a-payment.md) para crear un formulario de pago personalizado que puedes integrar en tu aplicación.
+![Página de suscripción de precio fijo con Payment Element móvil](https://b.stripecdn.com/docs-statics-srv/assets/fixed-price-collect-payment-details-mobile.b11cdc8fa8952d753238df4df3375fa6.png)
+
+> Si vendes productos o servicios digitales que se consumen dentro de tu aplicación (por ejemplo, suscripciones, monedas de juegos, niveles de juegos, acceso a contenido prémium o desbloqueo de una versión completa), debes usar las API de compra desde la aplicación de Apple. Esta regla tiene algunas excepciones, como los servicios personales uno a uno y las [aplicaciones basadas en regiones específicas](https://support.stripe.com/questions/changes-to-mobile-app-store-rules). Consulta las [pautas de revisión de la App Store](https://developer.apple.com/app-store/review/guidelines/#payments) para obtener más información.
+
+## Crear tu suscripción
+
+Esta guía te explica cómo:
+
+- Modelar tu empresa creando un catálogo de productos.
+- Crear un proceso de registro para agregar clientes.
+- Crear suscripciones y recopilar información de pago.
+- Comprueba y supervisa el estado de los pagos y las suscripciones.
+- Permitir que los clientes cambien de plan o cancelen la suscripción.
+- Aprenda a usar el [modo facturación flexible](https://docs.stripe.com/billing/subscriptions/billing-mode.md) para acceder a un comportamiento de facturación mejorado y funcionalidades adicionales.
+
+## Cómo modelar la suscripción en Stripe
+
+[Subscriptions](https://docs.stripe.com/api/subscriptions.md) simplifica tu facturación porque crea *Facturas* (Invoices are statements of amounts owed by a customer. They track the status of payments from draft through paid or otherwise finalized. Subscriptions automatically generate invoices, or you can manually create a one-off invoice) y [PaymentIntents](https://docs.stripe.com/api/payment_intents.md) por ti automáticamente.
+
+Antes de crear una suscripción, primero debes crear los siguientes objetos:
+
+- Un *Producto* (Products represent what your business sells—whether that's a good or a service) para mostrar lo que se vende
+- Un *Precio* (Prices define how much and how often to charge for products. This includes how much the product costs, what currency to use, and the interval if the price is for subscriptions) que determina el intervalo y el monto que se cobrará
+- Un `Cliente` para almacenar los *PaymentMethods* (PaymentMethods represent your customer's payment instruments, used with the Payment Intents or Setup Intents APIs) que se usan para realizar pagos recurrentes
+
+Un diagrama en el que se ilustran los objetos de facturación comunes y sus relaciones (See full diagram at https://docs.stripe.com/billing/subscriptions/build-subscriptions)
+
+```text
++---------------------------------+
+| Objeto Subscription             |
++---------------------------------+
+| id: sub_1234                    |
+| estado: active                  |
+| latest_invoice: in_1234         |
+| default_payment_method: pm_1234 |
+| cliente: cus_1234               |
+| items.data.price: price_1234    |
++---------------------------------+
+
++----------------+
+| Objeto Invoice |
++----------------+
+| id: in_1234    |
+| moneda: usd    |
+| estado: open   |
++----------------+
+
++----------------------+
+| Objeto PaymentMethod |
++----------------------+
+| id: pm_1234          |
+| tipo: card           |
+| tarjeta[marca]: visa |
++----------------------+
+
++-------------------------------------------------+
+| Objeto Customer                                 |
++-------------------------------------------------+
+| id: cus_1234                                    |
+| nombre: Carmen Rodríguez                        |
+| correo electrónico: carmenrodriguez@ejemplo.com |
++-------------------------------------------------+
+
++---------------------+
+| Objeto Price        |
++---------------------+
+| id: price_1234      |
+| producto: prod_1234 |
+| tipo: recurring     |
++---------------------+
+
++---------------------------+
+| Objeto Product            |
++---------------------------+
+| id: prod_1234             |
+| activo: verdadero         |
+| nombre: Widget, azul      |
+| default_price: price_1234 |
++---------------------------+
+
++--------------------+
+| PaymentIntent      |
++--------------------+
+| id: pi_1234        |
+| importe: 1000      |
+| cliente: cus_1234  |
+| factura: in_1234   |
+| estado: procesando |
++--------------------+
+
+[Objeto Subscription.latest_invoice] --> [Objeto Invoice]
+[Objeto Subscription.default_payment_method] --> [Objeto PaymentMethod]
+[Objeto Subscription.cliente] --> [Objeto Customer]
+[Objeto Subscription.items.data.price] --> [Objeto Price]
+[Objeto Price.producto] --> [Objeto Product]
+[PaymentIntent.factura] --> [Objeto Invoice]
+```
+
+### Definiciones de los objetos de la API
+
+| Recurso                                                                                                                                | Definición                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Cuenta configurada como un cliente](https://docs.stripe.com/api/v2/core/accounts/create.md#v2_create_accounts-configuration-customer) | Representa a un cliente en la API Accounts v2 que compra una suscripción. Configura un objeto `Account` como cliente y asócialo a una suscripción para realizar cargos recurrentes y hacerles un seguimiento, y para gestionar los productos a los que se suscribe. Para obtener más información, consulta nuestra [guía Usar Accounts como clientes](https://docs.stripe.com/accounts-v2/use-accounts-as-customers.md).                          |
+| [Customer](https://docs.stripe.com/api/customers.md)                                                                                   | Representa a un cliente en la API Clientes que compra una suscripción. Usa el objeto `Cliente` asociado a una suscripción para realizar y hacer seguimiento de los cargos recurrentes y administrar los productos a los que se suscriben.                                                                                                                                                                                                         |
+| [Derecho](https://docs.stripe.com/api/entitlements/active-entitlement.md)                                                              | Representa el acceso de un cliente a una funcionalidad incluida en un producto de servicio al que está suscrito. Cuando creas una suscripción para la compra recurrente de un producto por parte de un cliente, se crea automáticamente un derecho activo para cada funcionalidad asociada a ese producto. Cuando un cliente accede a tus servicios, utiliza sus derechos activos para habilitar las funcionalidades incluidas en su suscripción. |
+| [Funcionalidad](https://docs.stripe.com/api/entitlements/feature.md)                                                                   | Representa una funcionalidad o capacidad a la que tus clientes pueden acceder cuando se suscriben a un producto de servicio. Puedes incluir funciones en un producto creando ProductFeatures.                                                                                                                                                                                                                                                     |
+| [Factura](https://docs.stripe.com/api/invoices.md)                                                                                     | Una declaración de importes que un cliente adeuda y que rastrea los estados de pago desde el borrador hasta su pago o su finalización. Las suscripciones generan facturas automáticamente.                                                                                                                                                                                                                                                        |
+| [PaymentIntent](https://docs.stripe.com/api/payment_intents.md)                                                                        | Una forma de crear flujos de pago dinámicos. Un PaymentIntent hace un seguimiento del ciclo de vida del flujo del proceso compra del cliente y activa pasos adicionales de autenticación, si así lo exigen las disposiciones normativas, las reglas antifraude personalizadas de Radar o los métodos de pago con redireccionamiento. Las facturas crean PaymentIntents de forma automática.                                                       |
+| [PaymentMethod](https://docs.stripe.com/api/payment_methods.md)                                                                        | Los métodos de pago que usa un cliente para pagar tus productos. Por ejemplo, puedes guardar una tarjeta de crédito en un objeto `Cuenta` o `Cliente` configurado por el cliente y usarla para hacer pagos recurrentes para ese cliente. Por lo general, se usa con las API Payment Intents o Setup Intents.                                                                                                                                      |
+| [Precio](https://docs.stripe.com/api/prices.md)                                                                                        | Define el precio por unidad, la moneda y el ciclo de facturación para un producto.                                                                                                                                                                                                                                                                                                                                                                |
+| [Producto](https://docs.stripe.com/api/products.md)                                                                                    | Un bien o servicio que vende tu empresa. Un producto de servicio puede incluir una o más funciones.                                                                                                                                                                                                                                                                                                                                               |
+| [ProductFeature](https://docs.stripe.com/api/product-feature.md)                                                                       | Representa la inclusión de una sola funcionalidades en un solo producto. Cada producto está asociado a una ProductFeature para cada funcionalidad que incluye, y cada funcionalidad está asociada a una ProductFeature para cada producto que la incluye.                                                                                                                                                                                         |
+| [Suscripción](https://docs.stripe.com/api/subscriptions.md)                                                                            | Representa la compra recurrente programada de un producto por parte de un cliente. Usa una suscripción para cobrar pagos y proporcionar entrega repetida o acceso continuo a un producto.                                                                                                                                                                                                                                                         |
+
+Veamos un ejemplo de cómo funcionan juntos los productos, las funcionalidades y los derechos. Imagina que quieres configurar un servicio recurrente que ofrezca dos niveles: un producto estándar con funcionalidad básica y un producto avanzado que agregue funcionalidad extendida.
+
+1. Creas dos funcionalidades: `basic_features` y `extended_features`.
+2. Creas dos productos: `standard_product` y `advanced_product`.
+3. Para el producto estándar, creas una ProductFeature que asocia `basic_features` con `standard_product`.
+4. Para el producto avanzado, creas dos ProductFeatures: una que asocia `basic_features` con `advanced_product` y otra que asocia `extended_features` con `advanced_product`.
+
+Un cliente, `first_customer`, se suscribe al producto estándar. Cuando creas la suscripción, Stripe crea automáticamente un derecho que asocia `first_customer` con `basic_features`.
+
+Otro cliente, `second_customer`, se suscribe al producto avanzado. Al crear la suscripción, Stripe crea automáticamente dos derechos: uno que asocia `second_customer` con `basic_features` y otro que asocia `second_customer` con `extended_features`.
+
+Puedes determinar qué funcionalidades aprovisionar para un cliente [si recuperas sus derechos activos o escuchas el evento Resumen de derechos activos](https://docs.stripe.com/billing/entitlements.md?dashboard-or-api=api#entitlements). No tienes que recuperar sus suscripciones, productos y funcionalidades.
+
+## Configura Stripe
+
+El [SDK para React Native](https://github.com/stripe/stripe-react-native) es de código abierto y está plenamente documentado. Internamente, utiliza SDK para [iOS nativo](https://github.com/stripe/stripe-ios) y [Android](https://github.com/stripe/stripe-android). Para instalar el SDK para React Native de Stripe, ejecuta uno de los siguientes comandos en el directorio del proyecto (según el administrador de paquetes que utilices):
+
+#### hilado
+
+```bash
+yarn add @stripe/stripe-react-native
+```
+
+#### npm
+
+```bash
+npm install @stripe/stripe-react-native
+```
+
+A continuación, instala otras dependencias necesarias:
+
+- Para iOS, vaya al directorio **ios** y ejecute `pod install` para asegurarse de que también instala las dependencias nativas necesarias.
+- Para Android, no hay más dependencias para instalar.
+
+> Recomendamos seguir la [guía oficial de TypeScript](https://reactnative.dev/docs/typescript#adding-typescript-to-an-existing-project) para agregar soporte para TypeScript.
+
+### Inicialización de Stripe
+
+Para inicializar Stripe en tu aplicación React Native, ajusta tu pantalla de pago con el componente `StripeProvider` o usa el método de inicialización `initStripe`. Solo se requiere la [clave publicable](https://docs.stripe.com/keys.md#obtain-api-keys) de la API en `publishableKey`. El siguiente ejemplo muestra cómo inicializar Stripe usando el componente `StripeProvider`.
+
+```jsx
+import { useState, useEffect } from 'react';
+import { StripeProvider } from '@stripe/stripe-react-native';
+
+function App() {
+  const [publishableKey, setPublishableKey] = useState('');
+
+  const fetchPublishableKey = async () => {
+    const key = await fetchKey(); // fetch key from your server here
+    setPublishableKey(key);
+  };
+
+  useEffect(() => {
+    fetchPublishableKey();
+  }, []);
+
+  return (
+    <StripeProvider
+      publishableKey={publishableKey}
+      merchantIdentifier="merchant.identifier" // required for Apple Pay
+      urlScheme="your-app" // required for 3D Secure and bank redirects
+    >
+      {/* Your app code here */}
+    </StripeProvider>
+  );
+}
+```
+
+> Usa las [claves de prueba](https://docs.stripe.com/keys.md#obtain-api-keys) de la API durante las pruebas y el desarrollo, y tus claves para [modo activo](https://docs.stripe.com/keys.md#test-live-modes) cuando publiques tu aplicación.
+
+A continuación, instala la CLI de Stripe. La CLI proporciona pruebas de webhook y puedes ejecutarla para realizar llamadas API a Stripe. Esta guía muestra cómo utilizar la CLI para configurar un modelo de precios en una sección posterior.
+
+Instala la CLI de Stripe con [npm](https://www.npmjs.com/):
+
+```bash
+npm install -g @stripe/cli@latest
+```
+
+Después de la instalación, inicia sesión en tu cuenta de Stripe:
+
+```bash
+stripe login
+```
+
+Después de instalar la CLI, también puedes instalar [herramientas del agente](https://docs.stripe.com/cli/agent/setup) o configurar el [autocompletado](https://docs.stripe.com/cli/completion).
+
+> Con el fin de obtener más opciones de instalación para Windows, macOS, Linux y Docker, consulta el [readme de la CLI de Stripe](https://github.com/stripe/stripe-cli#installation) en GitHub.
+
+## Crear el modelo de tarifas [CLI o Dashboard de Stripe]
+
+Los [modelos de precios recurrentes](https://docs.stripe.com/products-prices/pricing-models.md) representan los productos o servicios que vendes, cuánto cuestan, qué monedas aceptas para los pagos y el período de servicio para las suscripciones. Para crear el modelo de precios, crea [productos](https://docs.stripe.com/api/products.md) (lo que vendes) y [precios](https://docs.stripe.com/api/prices.md) (cuánto cuestan y con qué frecuencia cobrar por los productos).
+
+En este ejemplo, se utiliza una tarifa con tasa fija con dos opciones de niveles de servicio diferentes: básico y premium. Para cada opción de nivel de servicio, debes crear un producto y un precio recurrente. Si quieres agregar un cargo por única vez, como el costo de instalación, crea un tercer producto con un precio por única vez.
+
+Cada producto se factura de forma mensual. El precio del producto básico es de 5 USD. El precio del producto premium es de 15 USD. Consulta la guía de [tarifas con tasa fija](https://docs.stripe.com/subscriptions/pricing-models/flat-rate-pricing.md) para ver un ejemplo con tres niveles.
+
+#### Dashboard
+
+Ve a la página [Agregar un producto](https://dashboard.stripe.com/test/products/create) y crea dos productos. Agrega un precio a cada producto, cada uno con un período de facturación mensual recurrente:
+
+- Producto prémium: servicio prémium con más funcionalidades
+
+  - Precio: Tarifa plana | 15 USD
+
+- Producto básico: servicio básico con las funcionalidades mínimas
+
+  - Precio: Tarifa plana | 5 USD
+
+Después de crear los precios, registra los ID de precio para usarlos en otros pasos. Los ID de precio se ven así: `price_G0FvDp6vZvdwRZ`.
+
+Cuando esté todo listo, usa el botón **Copiar en modo activo**, en la parte superior derecha de la página, para clonar el producto y pasarlo de [entorno de prueba a modo activo](https://docs.stripe.com/keys.md#test-live-modes).
+
+#### API
+
+Puedes usar la API para crear los [productos](https://docs.stripe.com/api/products.md) y los [precios](https://docs.stripe.com/api/prices.md).
+
+Crear el producto premium:
+
+```curl
+curl https://api.stripe.com/v1/products \
+  -u "<<YOUR_SECRET_KEY>>:" \
+  --data-urlencode "name=Billing Guide: Premium Service" \
+  -d "description=Premium service with extra features"
+```
+
+Crear el producto básico:
+
+```curl
+curl https://api.stripe.com/v1/products \
+  -u "<<YOUR_SECRET_KEY>>:" \
+  --data-urlencode "name=Billing Guide: Basic Service" \
+  -d "description=Basic service with minimum features"
+```
+
+Registra el ID de cada producto. Se ve así:
+
+```json
+{
+  "id": "prod_H94k5odtwJXMtQ",
+  "object": "product",
+  "active": true,
+  "attributes": [
+
+  ],
+  "created": 1587577341,
+  "description": "Premium service with extra features",
+  "images": [
+
+  ],
+  "livemode": false,
+  "metadata": {
+  },
+  "name": "Billing Guide: Premium Service",
+  "statement_descriptor": null,
+  "type": "service",
+  "unit_label": null,
+  "updated": 1587577341
+}
+```
+
+Usa los ID de producto para crear el precio de cada producto. El número [unit_amount](https://docs.stripe.com/api/prices/object.md#price_object-unit_amount) está en centavos. Por ejemplo, `1500` = 15 USD.
+
+Crear el precio superior:
+
+```curl
+curl https://api.stripe.com/v1/prices \
+  -u "<<YOUR_SECRET_KEY>>:" \
+  -d product={{PREMIUM_PRODUCT_ID}} \
+  -d unit_amount=1500 \
+  -d currency=usd \
+  -d "recurring[interval]=month"
+```
+
+Crear el precio básico:
+
+```curl
+curl https://api.stripe.com/v1/prices \
+  -u "<<YOUR_SECRET_KEY>>:" \
+  -d product={{BASIC_PRODUCT_ID}} \
+  -d unit_amount=500 \
+  -d currency=usd \
+  -d "recurring[interval]=month"
+```
+
+Registra el ID de cada precio para poder utilizarlo en los pasos siguientes. Se ve así:
+
+```json
+{
+  "id": "price_HGd7M3DV3IMXkC",
+  "object": "price",
+  "product": "prod_HGd6W1VUqqXGvr",
+  "type": "recurring",
+  "currency": "usd",
+  "recurring": {
+    "interval": "month",
+    "interval_count": 1,
+    "trial_period_days": null,
+    "usage_type": "licensed"
+  },
+  "active": true,
+  "billing_scheme": "per_unit",
+  "created": 1589319695,
+  "livemode": false,
+  "lookup_key": null,
+  "metadata": {},
+  "nickname": null,
+  "unit_amount": 1500,
+  "unit_amount_decimal": "1500",
+  "tiers": null,
+  "tiers_mode": null,
+  "transform_quantity": null
+}
+```
+
+## Crear el cliente [Cliente y servidor]
+
+Stripe necesita un cliente para cada suscripción. En el front-end de tu solicitud, recopila toda la información necesaria de tus usuarios y envíala al back-end.
+
+Si necesitas recopilar datos de la dirección, el Address Element te permite recopilar una dirección de envío o facturación para tus clientes. Para obtener más información sobre el Address Element, visita la página de [Address Element](https://docs.stripe.com/elements/address-element.md).
+
+```javascript
+import React from 'react';
+import {View, TextInput, StyleSheet, Button, Platform} from 'react-native';
+
+function RegisterView() {
+  const [email, setEmail] = React.useState('');
+
+  const createCustomer = async () => {
+    const apiEndpoint =
+      Platform.OS === 'ios' ? 'http://localhost:4242' : 'http://10.0.2.2:4567';
+    const response = await fetch(`${apiEndpoint}/create-customer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: email,
+      }),
+    });
+    if (response.status === 200) {
+      const customer = await response.json();
+      console.log(customer);
+    }
+  };
+
+  return (
+    <View>
+      <TextInput
+        style={styles.input}
+        placeholder="Email"
+        value={email}
+        onChangeText={setEmail}
+      />
+      <Button
+        title="Register"
+        onPress={async () => {
+          await createCustomer();
+        }}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  input: {
+    height: 40,
+    margin: 12,
+    borderWidth: 1,
+    padding: 10,
+  },
+});
+
+export default RegisterView;
+```
+
+Crea el “Customer Object” de Stripe en el servidor.
+
+```curl
+curl https://api.stripe.com/v1/customers \
+  -u "<<YOUR_SECRET_KEY>>:" \
+  --data-urlencode "email=jenny.rosen@example.com" \
+  -d "name=Jenny Rosen" \
+  -d "shipping[address][city]=San Francisco" \
+  -d "shipping[address][country]=US" \
+  -d "shipping[address][line1]=123 Main Street" \
+  -d "shipping[address][postal_code]=9460" \
+  -d "shipping[address][state]=CA" \
+  -d "shipping[name]=Jenny Rosen" \
+  -d "address[city]=San Francisco" \
+  -d "address[country]=US" \
+  -d "address[line1]=123 Main Street" \
+  -d "address[postal_code]=9460" \
+  -d "address[state]=CA"
+```
+
+## Crear la suscripción [Cliente y servidor]
+
+> Si quieres procesar el Payment Element antes de crear una suscripción, consulta [Recopilar los datos de pago antes de crear un Intent](https://docs.stripe.com/payments/accept-a-payment-deferred.md?type=subscription).
+
+Permite que tu nuevo cliente elija un plan y luego cree la suscripción. En esta guía, elegirá entre un plan Básico y un plan Prémium.
+
+En tu aplicación, envía el ID de precio seleccionado y el ID del registro del cliente al back-end.
+
+```javascript
+const createSubscription = async (priceId, customerId) => {
+  const apiEndpoint =
+    Platform.OS === 'ios' ? 'http://localhost:4242' : 'http://10.0.2.2:4567';
+  const response = await fetch(`${apiEndpoint}/create-subscription`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      priceId: priceId,
+      customerId: customerId,
+    }),
+  });
+  if (response.status === 200) {
+    const subscription = await response.json();
+    return subscription;
+  }
+};
+```
+
+En el back-end, crea la suscripción con el estado `incomplete` usando `payment_behavior=default_incomplete`. Luego, devuelve el `client_secret` del primer [payment intent](https://docs.stripe.com/payments/payment-intents.md) de la suscripción al front-end para completar el pago al expandir el [confirmation_secret](https://docs.stripe.com/api/invoices/object.md#invoice_object-confirmation_secret) en la última factura de la suscripción.
+
+Para habilitar el [comportamiento de suscripción mejorado](https://docs.stripe.com/billing/subscriptions/billing-mode.md), establece `billing_mode[type]` en `flexible`. Debes utilizar la versión de la API de Stripe [2025-06-30.basil](https://docs.stripe.com/changelog/basil.md#2025-06-30.basil) o posterior.
+
+Establece [save_default_payment_method](https://docs.stripe.com/api/subscriptions/object.md#subscription_object-payment_settings-save_default_payment_method) en `on_subscription` para guardar el método de pago como predeterminado para una suscripción cuando un pago se realiza correctamente. Guardar un método de pago predeterminado aumenta la tasa de éxito de futuros pagos de suscripción.
+
+En el siguiente ejemplo, se crea una `Subscription` y se expande el `confirmation_secret` de su última factura en la respuesta. Una vez creada la suscripción, lee `subscription.latest_invoice.confirmation_secret.client_secret` y devuelve ese valor al front-end para confirmar el pago.
+
+```curl
+curl https://api.stripe.com/v1/subscriptions \
+  -u "<<YOUR_SECRET_KEY>>:" \
+  -d "customer={{CUSTOMER_ID}}" \
+  -d "items[0][price]={{PRICE_ID}}" \
+  -d payment_behavior=default_incomplete \
+  -d "payment_settings[save_default_payment_method]=on_subscription" \
+  -d "billing_mode[type]=flexible" \
+  -d "expand[0]=latest_invoice.confirmation_secret"
+```
+
+> Si usas un *precio en múltiples monedas* (A single Price object can support multiple currencies. Each purchase uses one of the supported currencies for the Price, depending on how you use the Price in your integration), usa el parámetro [currency](https://docs.stripe.com/api/subscriptions/create.md#create_subscription-currency) para indicarle a la suscripción cuál de las monedas del precio debe usar. (Si omites el parámetro `currency`, la suscripción utilizará la moneda predeterminada del precio).
+
+La suscripción ahora está `inactiva` y a la espera de pago. El ejemplo de respuesta que figura a continuación destaca los campos mínimos que deben almacenarse, pero puedes almacenar los campos a los que tu solicitud accede con frecuencia.
+
+```json
+{
+  "id": "sub_JgRjFjhKbtD2qz",
+  "object": "subscription",
+  "application_fee_percent": null,
+  "automatic_tax": {
+    "disabled_reason": null,
+    "enabled": false,
+    "liability": null
+  },
+  "billing_cycle_anchor": 1623873347,
+  "billing_cycle_anchor_config": null,
+  "cancel_at": null,
+  "cancel_at_period_end": false,
+  "canceled_at": null,
+  "cancellation_details": {
+    "comment": null,
+    "feedback": null,
+    "reason": null
+  },
+  "collection_method": "charge_automatically",
+  "created": 1623873347,
+  "currency": "usd",
+  "customer": "cus_9s6XI9OFIdpjIg",
+  "days_until_due": null,
+  "default_payment_method": null,
+  "default_source": null,
+  "default_tax_rates": [
+
+  ],
+  "discounts": [],
+  "ended_at": null,
+  "invoice_customer_balance_settings": {
+    "account_tax_ids": null,
+    "issuer": {
+      "type": "self"
+    }
+  },
+  "items": {
+    "object": "list",
+    "data": [
+      {
+        "id": "si_JgRjmS4Ur1khEx",
+        "object": "subscription_item",
+        "created": 1623873347,
+        "current_period_end": 1626465347,
+        "current_period_start": 1623873347,
+        "discounts": [],
+        "metadata": {
+        },
+        "plan": {
+          "id": "price_1J32RfGPZ1iASj5zHHp57z7C",
+          "object": "plan",
+          "active": true,
+          "amount": 2000,
+          "amount_decimal": "2000",
+          "billing_scheme": "per_unit",
+          "created": 1623864151,
+          "currency": "usd",
+          "interval": "month",
+          "interval_count": 1,
+          "livemode": false,
+          "metadata": {
+          },
+          "nickname": null,
+          "product": "prod_JgPF5xnq7qBun3",
+          "tiers": null,
+          "tiers_mode": null,
+          "transform_usage": null,
+          "trial_period_days": null,
+          "usage_type": "licensed"
+        },
+        "price": {
+          "id": "price_1J32RfGPZ1iASj5zHHp57z7C",
+          "object": "price",
+          "active": true,
+          "billing_scheme": "per_unit",
+          "created": 1623864151,
+          "currency": "usd",
+          "livemode": false,
+          "lookup_key": null,
+          "metadata": {
+          },
+          "nickname": null,
+          "product": "prod_JgPF5xnq7qBun3",
+          "recurring": {
+            "interval": "month",
+            "interval_count": 1,
+            "trial_period_days": null,
+            "usage_type": "licensed"
+          },
+          "tiers_mode": null,
+          "transform_quantity": null,
+          "type": "recurring",
+          "unit_amount": 2000,
+          "unit_amount_decimal": "2000"
+        },
+        "quantity": 1,
+        "subscription": "sub_JgRjFjhKbtD2qz",
+        "tax_rates": [
+
+        ]
+      }
+    ],
+    "has_more": false,
+    "total_count": 1,
+    "url": "/v1/subscription_items?subscription=sub_JgRjFjhKbtD2qz"
+  },
+  "latest_invoice": {
+    "id": "in_1J34pzGPZ1iASj5zB87qdBNZ",
+    "object": "invoice",
+    "account_country": "US",
+    "account_name": "Angelina's Store",
+    "account_tax_ids": null,
+    "amount_due": 2000,
+    "amount_overpaid": 0,
+    "amount_paid": 0,
+    "amount_remaining": 2000,
+    "amount_shipping": 0,
+    "attempt_count": 0,
+    "attempted": false,
+    "auto_advance": false,
+    "automatic_tax": {
+      "disabled_reason": null,
+      "enabled": false,
+      "liability": null,
+      "status": null
+    },
+    "automatically_finalizes_at": null,
+    "billing_reason": "subscription_create",
+    "collection_method": "charge_automatically",
+    "created": 1623873347,
+    "currency": "usd",
+    "custom_fields": null,
+    "customer": "cus_9s6XI9OFIdpjIg",
+    "customer_address": null,
+    "customer_email": "angelina@stripe.com",
+    "customer_name": null,
+    "customer_phone": null,
+    "customer_shipping": {
+      "address": {
+        "city": "",
+        "country": "US",
+        "line1": "Berry",
+        "line2": "",
+        "postal_code": "",
+        "state": ""
+      },
+      "name": "",
+      "phone": null
+    },
+    "customer_tax_exempt": "none",
+    "customer_tax_ids": [
+
+    ],
+    "default_payment_method": null,
+    "default_source": null,
+    "default_tax_rates": [
+
+    ],
+    "description": null,
+    "discounts": [],
+    "due_date": null,
+    "effective_at": "1623873347",
+    "ending_balance": 0,
+    "footer": null,
+    "from_invoice": null,
+    "hosted_invoice_url": "https://invoice.stripe.com/i/acct_1By64KGPZ1iASj5z/invst_JgRjzIOILGeq2MKC9T0KtyXnD5udsLp",
+    "invoice_pdf": "https://pay.stripe.com/invoice/acct_1By64KGPZ1iASj5z/invst_JgRjzIOILGeq2MKC9T0KtyXnD5udsLp/pdf",
+    "last_finalization_error": null,
+    "latest_revision": null,
+    "lines": {
+      "object": "list",
+      "data": [
+        {
+          "id": "il_1N2CjMBwKQ696a5NeOawRQP2",
+          "object": "line_item",
+          "amount": 2000,
+          "currency": "usd",
+          "description": "1 × Gold Special (at $20.00 / month)",
+          "discount_amounts": [
+
+          ],
+          "discountable": true,
+          "discounts": [
+
+          ],
+          "invoice": "in_1J34pzGPZ1iASj5zB87qdBNZ",
+          "livemode": false,
+          "metadata": {
+          },
+          "parent": {
+            "invoice_item_details": null,
+            "subscription_item_details":
+            {
+              "invoice_item": null,
+              "proration": false,
+              "proration_details":
+              {
+                "credited_items": null
+              },
+              "subscription":
+              "sub_JgRjFjhKbtD2qz",
+              "subscription_item":
+                "si_JgRjmS4Ur1khEx"
+            },
+            "type": "subscription_item_details"
+          },
+          "period": {
+            "end": 1626465347,
+            "start": 1623873347
+          },
+          "plan": {
+            "id": "price_1J32RfGPZ1iASj5zHHp57z7C",
+            "object": "plan",
+            "active": true,
+            "amount": 2000,
+            "amount_decimal": "2000",
+            "billing_scheme": "per_unit",
+            "created": 1623864151,
+            "currency": "usd",
+            "interval": "month",
+            "interval_count": 1,
+            "livemode": false,
+            "metadata": {
+            },
+            "nickname": null,
+            "product": "prod_JgPF5xnq7qBun3",
+            "tiers": null,
+            "tiers_mode": null,
+            "transform_usage": null,
+            "trial_period_days": null,
+            "usage_type": "licensed"
+          },
+          "price": {
+            "id": "price_1J32RfGPZ1iASj5zHHp57z7C",
+            "object": "price",
+            "active": true,
+            "billing_scheme": "per_unit",
+            "created": 1623864151,
+            "currency": "usd",
+            "livemode": false,
+            "lookup_key": null,
+            "metadata": {
+            },
+            "nickname": null,
+            "product": "prod_JgPF5xnq7qBun3",
+            "recurring": {
+              "interval": "month",
+              "interval_count": 1,
+              "trial_period_days": null,
+              "usage_type": "licensed"
+            },
+            "tiers_mode": null,
+            "transform_quantity": null,
+            "type": "recurring",
+            "unit_amount": 2000,
+            "unit_amount_decimal": "2000"
+          },
+          "quantity": 1,
+          "taxes": []
+        }
+      ],
+      "has_more": false,
+      "total_count": 1,
+      "url": "/v1/invoices/in_1J34pzGPZ1iASj5zB87qdBNZ/lines"
+    },
+    "livemode": false,
+    "metadata": {
+    },
+    "next_payment_attempt": null,
+    "number": "C008FC2-0354",
+    "on_behalf_of": null,
+    "parent": {
+      "quote_details": null,
+      "subscription_details": {
+        "metadata": {},
+        "pause_collection": null,
+        "subscription": "sub_JgRjFjhKbtD2qz"
+      }
+    },
+    "confirmation_secret": {
+      "client_secret": "pi_1J34pzGPZ1iASj5zI2nOAaE6_secret_l7FN6ldFfXiFmJEumenJ2y2wu",
+      "type": "payment_intent"
+    },
+    "payment_intent": {
+      "id": "pi_1J34pzGPZ1iASj5zI2nOAaE6",
+      "object": "payment_intent",
+      "allowed_source_types": [
+        "card"
+      ],
+      "amount": 2000,
+      "amount_capturable": 0,
+      "amount_received": 0,
+      "application": null,
+      "application_fee_amount": null,
+      "canceled_at": null,
+      "cancellation_reason": null,
+      "capture_method": "automatic",
+      "charges": {
+        "object": "list",
+        "data": [
+
+        ],
+        "has_more": false,
+        "total_count": 0,
+        "url": "/v1/charges?payment_intent=pi_1J34pzGPZ1iASj5zI2nOAaE6"
+      },
+      "client_secret": "pi_1J34pzGPZ1iASj5zI2nOAaE6_secret_l7FN6ldFfXiFmJEumenJ2y2wu",
+      "confirmation_method": "automatic",
+      "created": 1623873347,
+      "currency": "usd",
+      "customer": "cus_9s6XI9OFIdpjIg",
+      "description": "Subscription creation",
+      "invoice": "in_1J34pzGPZ1iASj5zB87qdBNZ",
+      "last_payment_error": null,
+      "livemode": false,
+      "metadata": {
+      },
+      "next_action": null,
+      "next_source_action": null,
+      "on_behalf_of": null,
+      "payment_method": null,
+      "payment_method_options": {
+        "card": {
+          "installments": null,
+          "network": null,
+          "request_three_d_secure": "automatic"
+        }
+      },
+      "payment_method_types": [
+        "card"
+      ],
+      "receipt_email": null,
+      "review": null,
+      "setup_future_usage": "off_session",
+      "shipping": null,
+      "source": "card_1By6iQGPZ1iASj5z7ijKBnXJ",
+      "statement_descriptor": null,
+      "statement_descriptor_suffix": null,
+      "status": "requires_confirmation",
+      "transfer_data": null,
+      "transfer_group": null
+    },
+    "payment_settings": {
+      "payment_method_options": null,
+      "payment_method_types": null,
+      "save_default_payment_method": "on_subscription"
+    },
+    "period_end": 1623873347,
+    "period_start": 1623873347,
+    "post_payment_credit_notes_amount": 0,
+    "pre_payment_credit_notes_amount": 0,
+    "receipt_number": null,
+    "starting_balance": 0,
+    "statement_descriptor": null,
+    "status": "open",
+    "status_transitions": {
+      "finalized_at": 1623873347,
+      "marked_uncollectible_at": null,
+      "paid_at": null,
+      "voided_at": null
+    },
+    "subscription": "sub_JgRjFjhKbtD2qz",
+    "subtotal": 2000,
+    "tax": null,
+    "tax_percent": null,
+    "total": 2000,
+    "total_discount_amounts": [],
+    "total_tax_amounts": [],
+    "transfer_data": null,
+    "webhooks_delivered_at": 1623873347
+  },
+  "livemode": false,
+  "metadata": {
+  },
+  "next_pending_invoice_item_invoice": null,
+  "pause_collection": null,
+  "pending_invoice_item_interval": null,
+  "pending_setup_intent": null,
+  "pending_update": null,
+  "plan": {
+    "id": "price_1J32RfGPZ1iASj5zHHp57z7C",
+    "object": "plan",
+    "active": true,
+    "amount": 2000,
+    "amount_decimal": "2000",
+    "billing_scheme": "per_unit",
+    "created": 1623864151,
+    "currency": "usd",
+    "interval": "month",
+    "interval_count": 1,
+    "livemode": false,
+    "metadata": {
+    },
+    "nickname": null,
+    "product": "prod_JgPF5xnq7qBun3",
+    "tiers": null,
+    "tiers_mode": null,
+    "transform_usage": null,
+    "trial_period_days": null,
+    "usage_type": "licensed"
+  },
+  "quantity": 1,
+  "schedule": null,
+  "start": 1623873347,
+  "start_date": 1623873347,
+  "status": "incomplete",
+  "tax_percent": null,
+  "transfer_data": null,
+  "trial_end": null,
+  "trial_start": null
+}
+```
+
+### Actualiza el punto de conexión del servidor
+
+Agrega la creación de claves efímeras al punto de conexión de la suscripción y devuélvela en la respuesta:
+
+#### Ruby
+
+```ruby
+ephemeral_key = client.v1.ephemeral_keys.create(
+  {customer: customer_id},
+  {stripe_version: '2025-06-30.basil'}
+)
+
+{
+  subscriptionId: subscription.id,
+  clientSecret: subscription.latest_invoice.confirmation_secret.client_secret,
+  ephemeralKey: ephemeral_key.secret,
+  customerId: customer_id,
+}.to_json
+```
+
+### Actualiza tu modelo de respuesta
+
+```typescript
+interface SubscriptionsResponse {
+  subscriptionId: string;
+  clientSecret: string;
+  ephemeralKey: string;
+  customerId: string;
+}
+```
+
+### Pasar la configuración del cliente a PaymentSheet
+
+Agrega los siguientes parámetros al inicializar PaymentSheet:
+
+```javascript
+await initPaymentSheet({
+  paymentIntentClientSecret: clientSecret,
+  customerId: customerId,
+  customerEphemeralKeySecret: ephemeralKey,
+  // ... other parameters
+});
+```
+
+## Recopilar datos de pago [Cliente]
+
+Utiliza [Payment Sheet](https://docs.stripe.com/payments/mobile/payment-sheet.md) para recolectar detalles del pago y activar la suscripción. Puedes personalizar Elements para que coincida con la apariencia de tu solicitud.
+
+Payment Sheet recopila de forma segura todos los detalles de pago necesarios para una amplia variedad de métodos de pago. Más información sobre los [métodos de pago admitidos](https://docs.stripe.com/payments/payment-methods/payment-method-support.md#product-support) para Payment Sheet y Subscriptions.
+
+### Agregar el Payment Element a tu aplicación
+
+> Este paso muestra una forma de empezar, pero puedes usar cualquier [integración de pagos dentro de la aplicación](https://docs.stripe.com/payments/mobile.md).
+
+Inicializa y presenta el Payment Element móvil usando la clase PaymentSheet.
+
+```javascript
+import React from 'react';
+import {useStripe, PaymentSheetError} from '@stripe/stripe-react-native';
+import {View, Button} from 'react-native';
+
+function SubscribeView({clientSecret}) {
+  const {initPaymentSheet, presentPaymentSheet} = useStripe();
+
+  React.useEffect(() => {
+    const initializePaymentSheet = async () => {
+      const {error} = await initPaymentSheet({
+        paymentIntentClientSecret: clientSecret,
+        returnURL: 'stripe-example://payment-sheet',
+        // Set `allowsDelayedPaymentMethods` to true if your business handles
+        // delayed notification payment methods like US bank accounts.
+        allowsDelayedPaymentMethods: true,
+      });
+      if (error) {
+        // Handle error
+      }
+    };
+
+    initializePaymentSheet();
+  }, [clientSecret, initPaymentSheet]);
+
+  return (
+    <View>
+      <Button
+        title="Subscribe"
+        onPress={async () => {
+          const {error} = await presentPaymentSheet();
+          if (error) {
+            if (error.code === PaymentSheetError.Failed) {
+              // Handle failed
+            } else if (error.code === PaymentSheetError.Canceled) {
+              // Handle canceled
+            }
+          } else {
+            // Payment succeeded
+          }
+        }}
+      />
+    </View>
+  );
+}
+
+export default SubscribeView;
+```
+
+El Payment Element móvil renderiza una hoja que le permite a tu cliente seleccionar un método de pago. El formulario recopila automáticamente todos los datos de pago necesarios para el método de pago que elijan.
+
+Establecer `allowsDelayedPaymentMethods` en true permite aceptar métodos de pago de [notificación diferida](https://docs.stripe.com/payments/payment-methods.md#payment-notification) como cuentas bancarias en EE.&nbsp;UU. Para estos métodos de pago, el estado final del pago no se conoce cuando se completa el `PaymentSheet`, sino que se efectúa con éxito o falla más tarde. Si aceptas este tipo de métodos de pago, infórmale al cliente que su pedido está confirmado y solo finalízalo (por ejemplo, envía el producto) cuando el pago se realice correctamente.
+
+Puedes personalizar el Payment Element para que coincida con el diseño de tu aplicación usando la propiedad [appearance](https://docs.stripe.com/elements/appearance-api/mobile.md?platform=ios) de tu objeto `PaymentSheet.Configuration`.
+
+### Confirmar pago
+
+El Payment Element móvil crea un PaymentMethod y confirma que el primer PaymentIntent de la suscripción está incompleto, lo que genera un cargo. Si se requiere *autenticación reforzada de clientes* (Strong Customer Authentication (SCA) is a regulatory requirement in effect as of September 14, 2019, that impacts many European online payments. It requires customers to use two-factor authentication like 3D Secure to verify their purchase) (SCA) para el pago, el Payment Element se encarga del proceso de autenticación antes de confirmar el PaymentIntent.
+
+## Configurar una URL de retorno (solo para iOS) [Lado del cliente]
+
+Cuando un cliente sale de tu aplicación (por ejemplo, para autenticarse en Safari o en su aplicación bancaria), proporciona una forma de regresar automáticamente a tu aplicación. Muchos tipos de métodos de pago *requieren* una URL de retorno. Si no la proporcionas, no podemos presentarles a tus usuarios métodos de pago que requieran una URL de retorno, incluso si los habilitaste.
+
+Para proporcionar una URL de retorno:
+
+1. [Registra](https://developer.apple.com/documentation/xcode/defining-a-custom-url-scheme-for-your-app#Register-your-URL-scheme) una URL personalizada. No se admiten vínculos universales.
+2. [Configura](https://reactnative.dev/docs/linking) tu URL personalizada.
+3. Configura tu componente raíz para reenviar la URL al SDK de Stripe como se muestra a continuación.
+
+> Si utilizas Expo, [configura tu esquema](https://docs.expo.io/guides/linking/#in-a-standalone-app) en el archivo `app.json`.
+
+```jsx
+import { useEffect, useCallback } from 'react';
+import { Linking, View } from 'react-native';
+import { useStripe } from '@stripe/stripe-react-native';
+
+export default function MyApp() {
+  const { handleURLCallback } = useStripe();
+
+  const handleDeepLink = useCallback(
+    async (url: string | null) => {
+      if (url) {
+        const stripeHandled = await handleURLCallback(url);
+        if (stripeHandled) {
+          // This was a Stripe URL - you can return or add extra handling here as you see fit
+        } else {
+          // This was NOT a Stripe URL – handle as you normally would
+        }
+      }
+    },
+    [handleURLCallback]
+  );
+
+  useEffect(() => {
+    const getUrlAsync = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      handleDeepLink(initialUrl);
+    };
+
+    getUrlAsync();
+
+    const deepLinkListener = Linking.addEventListener(
+      'url',
+      (event: { url: string }) => {
+        handleDeepLink(event.url);
+      }
+    );
+
+    return () => deepLinkListener.remove();
+  }, [handleDeepLink]);
+
+  return (
+    <View>
+      <AwesomeAppComponent />
+    </View>
+  );
+}
+```
+
+Además, al llamar al método `initPaymentSheet`, debes especificar `returnURL`:
+
+```js
+await initPaymentSheet({
+  ...
+  returnURL: 'your-app://stripe-redirect',
+  ...
+});
+```
+
+Para obtener más información sobre esquemas URL nativos, consulta la documentación para [Android](https://developer.android.com/training/app-links/deep-linking) e [iOS](https://developer.apple.com/documentation/xcode/allowing_apps_and_websites_to_link_to_your_content/defining_a_custom_url_scheme_for_your_app).
+
+## Optional: Habilitar Apple Pay
+
+### Inscribirse para obtener un ID de comerciante Apple
+
+Obtén un ID de comerciante Apple [solicitando un nuevo identificador](https://developer.apple.com/account/resources/identifiers/add/merchant) en el sitio web de desarrolladores de Apple.
+
+Completa el formulario con una descripción y el identificador. La descripción es para tus registros y se puede modificar en el futuro. Stripe recomienda usar el nombre de tu aplicación como identificador (por ejemplo, `merchant.com.{{YOUR_APP_NAME}}`).
+
+### Crear un nuevo certificado de Apple Pay
+
+Crea un certificado para que tu aplicación cifre los datos de pago.
+
+Ve a [Configuración de certificados de iOS](https://dashboard.stripe.com/settings/ios_certificates) en el Dashboard, haz clic en **Agregar nueva aplicación** y sigue la guía.
+
+Descarga un archivo de solicitud de firma de certificado (CSR) para obtener un certificado seguro de Apple que te permita utilizar Apple Pay.
+
+Se debe usar un archivo CSR para emitir exactamente un certificado. Si cambias tu ID de comerciante de Apple, debes ir a la [Configuración de certificados de iOS](https://dashboard.stripe.com/settings/ios_certificates) en el Dashboard para obtener una nueva CSR y un nuevo certificado.
+
+### Integrarse con Xcode
+
+Agrega la funcionalidad Apple Pay a tu aplicación. En Xcode, abre la configuración del proyecto, selecciona la pestaña **Firma y funcionalidades** y agrega la funcionalidad **Apple Pay**. En este paso, quizá se te solicite iniciar sesión en tu cuenta de desarrollador. Selecciona el ID de comerciante que creaste antes, y tu aplicación estará lista para aceptar Apple Pay.
+![](https://b.stripecdn.com/docs-statics-srv/assets/xcode.a701d4c1922d19985e9c614a6f105bf1.png)
+
+Habilitar la funcionalidad Apple Pay en Xcode
+
+### Agregar Apple Pay
+
+#### Pagos recurrentes
+
+Cuando accedes a `initPaymentSheet`, introduce los [parámetros de Apple Pay](https://stripe.dev/stripe-react-native/api-reference/modules/PaymentSheet.html#ApplePayParams) con `merchantCountryCode` establecido en el código de país de tu empresa.
+
+De acuerdo con las [pautas de Apple](https://developer.apple.com/design/human-interface-guidelines/apple-pay#Supporting-subscriptions) para pagos recurrentes, también debes establecer un `cardItem` que incluya un [RecurringCartSummaryItem](https://stripe.dev/stripe-react-native/api-reference/modules/ApplePay.html#RecurringCartSummaryItem) con el importe que pretendes cobrar (por ejemplo, “USD&nbsp;59.95 al mes”).
+
+También puedes adoptar [tokens de comerciante](https://developer.apple.com/apple-pay/merchant-tokens/) estableciendo la `request` con su `type` establecido en `PaymentRequestType.Recurring`
+
+Para obtener más información sobre cómo usar pagos recurrentes con Apple Pay, consulta la [documentación de PassKit de Apple](https://developer.apple.com/documentation/passkit/pkpaymentrequest).
+
+#### iOS (React Native)
+
+```javascript
+const initializePaymentSheet = async () => {
+  const recurringSummaryItem = {
+    label: 'My Subscription',
+    amount: '59.99',
+    paymentType: 'Recurring',
+    intervalCount: 1,
+    intervalUnit: 'month',
+    // Payment starts today
+    startDate: new Date().getTime() / 1000,
+
+    // Payment ends in one year
+    endDate: new Date().getTime() / 1000 + 60 * 60 * 24 * 365,
+  };
+
+  const {error} = await initPaymentSheet({
+    // ...
+    applePay: {
+      merchantCountryCode: 'US',
+      cartItems: [recurringSummaryItem],
+      request: {
+        type: PaymentRequestType.Recurring,
+        description: 'Recurring',
+        managementUrl: 'https://my-backend.example.com/customer-portal',
+        billing: recurringSummaryItem,
+        billingAgreement:
+          "You'll be billed $59.99 every month for the next 12 months. To cancel at any time, go to Account and click 'Cancel Membership.'",
+      },
+    },
+  });
+};
+```
+
+### Seguimiento de pedidos
+
+Para agregar información [de seguimiento de pedidos](https://developer.apple.com/design/human-interface-guidelines/technologies/wallet/designing-order-tracking) en iOS 16 o posterior, configura una función de de llamada`setOrderTracking`. Stripe llama a tu implementación después de que se complete el pago, pero antes de que iOS descarte la hoja de Apple Pay.
+
+En su implementación de la función de devolución de llamada `setOrderTracking`, obtén los detalles del pedido de tu servidor para el pedido completado y transfiere los datos a la función de `completion` proporcionada.
+
+Para obtener más información sobre el seguimiento de pedidos, consulta la [documentación sobre pedidos de billetera de Apple](https://developer.apple.com/documentation/walletorders).
+
+#### iOS (React Native)
+
+```javascript
+await initPaymentSheet({
+  // ...
+  applePay: {
+    // ...
+    setOrderTracking: async complete => {
+      const apiEndpoint =
+        Platform.OS === 'ios'
+          ? 'http://localhost:4242'
+          : 'http://10.0.2.2:4567';
+      const response = await fetch(
+        `${apiEndpoint}/retrieve-order?orderId=${orderId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+      if (response.status === 200) {
+        const orderDetails = await response.json();
+        // orderDetails should include orderIdentifier, orderTypeIdentifier,
+        // authenticationToken and webServiceUrl
+        complete(orderDetails);
+      }
+    },
+  },
+});
+```
+
+## Escuchar webhooks [Servidor]
+
+Para completar la integración, tienes que procesar los *webhooks* (A webhook is a real-time push notification sent to your application as a JSON payload through HTTPS requests) que envió Stripe. Estos son eventos que se originan cada vez que un estado dentro de Stripe cambia, por ejemplo, cuando las suscripciones crean facturas nuevas. En tu aplicación, configura un controlador de HTTP para aceptar una solicitud POST que contenga el evento de webhook y verifica la firma del evento:
+
+#### Ruby
+
+```ruby
+
+# Don't put any keys in code. See https://docs.stripe.com/keys-best-practices.
+# Find your keys at https://dashboard.stripe.com/apikeys.
+client = Stripe::StripeClient.new('<<YOUR_SECRET_KEY>>')
+
+post '/webhook' do
+  # You can use webhooks to receive information about asynchronous payment events.
+  # For more about our webhook events check out https://stripe.com/docs/webhooks.
+  webhook_secret = ENV['STRIPE_WEBHOOK_SECRET']
+  payload = request.body.read
+  if !webhook_secret.empty?
+    # Retrieve the event by verifying the signature using the raw body and secret if webhook signing is configured.
+    sig_header = request.env['HTTP_STRIPE_SIGNATURE']
+    event = nil
+
+    begin
+      event = Stripe::Webhook.construct_event(
+        payload, sig_header, webhook_secret
+      )
+    rescue JSON::ParserError => e
+      # Invalid payload
+      status 400
+      return
+    rescue Stripe::SignatureVerificationError => e
+      # Invalid signature
+      puts '⚠️  Webhook signature verification failed.'
+      status 400
+      return
+    end
+  else
+    data = JSON.parse(payload, symbolize_names: true)
+    event = Stripe::Event.construct_from(data)
+  end
+  # Get the type of webhook event sent - used to check the status of PaymentIntents.
+  event_type = event['type']
+  data = event['data']
+  data_object = data['object']
+
+  if event_type == 'invoice.paid'
+    # Used to provision services after the trial has ended.
+    # The status of the invoice will show up as paid. Store the status in your
+    # database to reference when a user accesses your service to avoid hitting rate
+    # limits.
+    # puts data_object
+  end
+
+  if event_type == 'invoice.payment_failed'
+    # If the payment fails or the customer does not have a valid payment method,
+    # an invoice.payment_failed event is sent, the subscription becomes past_due.
+    # Use this webhook to notify your user that their payment has
+    # failed and to retrieve new card details.
+    # puts data_object
+  end
+
+  if event_type == 'customer.subscription.deleted'
+    # handle subscription canceled automatically based
+    # upon your subscription settings. Or if the user cancels it.
+    # puts data_object
+  end
+
+  content_type 'application/json'
+  { status: 'success' }.to_json
+end
+```
+
+Durante el desarrollo, usa la CLI de Stripe para [observar los webhooks y reenviarlos a tu aplicación](https://docs.stripe.com/webhooks.md#test-webhook). Ejecuta lo siguiente en una nueva terminal mientras tu aplicación de desarrollo está funcionando:
+
+#### curl
+
+```bash
+  stripe listen --forward-to localhost:4242/webhook
+```
+
+Para la producción, configura una URL de punto de conexión de webhook en el Dashboard o utiliza la [API Webhook Endpoints](https://docs.stripe.com/api/webhook_endpoints.md).
+
+Necesita escuchar algunos eventos para completar los pasos restantes de esta guía. Consulte [Eventos de suscripción](https://docs.stripe.com/billing/subscriptions/webhooks.md#events) para más detalles sobre los webhooks específicos de suscripción.
+
+## Brindar acceso a tu servicio [Cliente y servidor]
+
+Ahora que la suscripción está activa, dale a tu usuario acceso a tu servicio. Para ello, escucha los eventos `customer.subscription.created`, `customer.subscription.updated`, y `customer.subscription.deleted`. Estos eventos pasan un objeto Subscription que contiene un campo `status` que indica si la suscripción está activa, vencida o cancelada. Consulta [el ciclo de vida de la suscripción](https://docs.stripe.com/billing/subscriptions/overview.md#subscription-lifecycle) para obtener una lista completa de estados.
+
+En tu controlador de webhook:
+
+1. Verifica el estado de la suscripción. Si es `activo`, entonces tu usuario ha pagado por su producto.
+2. Revisa el producto al que se suscribió el cliente y bríndale acceso al servicio. Es mejor revisar el producto que el precio porque te da más flexibilidad en caso de que necesites cambiar la tarifa o el intervalo de facturación.
+3. Almacena el `product.id`, `subscription.id` y el `subscription.status` en tu base de datos junto con `customer.id` que ya guardaste. Consulta este registro cuando tengas que determinar qué funcionalidades habilitar para el usuario en tu aplicación.
+
+El estado de la suscripción puede cambiar en cualquier momento de su ciclo de vida, incluso si tu solicitud no hace ninguna llamada directa a Stripe. Por ejemplo, se puede producir un error de renovación debido a una tarjeta de crédito vencida, lo que genera que el estado de la suscripción pase a vencido. O, si usas el [portal de clientes](https://docs.stripe.com/customer-management.md), un usuario puede optar por cancelar la suscripción sin ingresar a tu aplicación directamente. El uso correcto del controlador mantiene el estado de tu solicitud sincronizado con Stripe.
+
+## Cancelar la suscripción [Cliente y servidor]
+
+Con frecuencia, se les permite a los clientes cancelar su suscripción. En este ejemplo, se agrega la opción de cancelación en la página de configuración de la cuenta.
+
+En este ejemplo, el ID de la suscripción se recopila en el front-end, pero tu aplicación puede obtener esta información de tu base de datos para el usuario que ha iniciado sesión.
+![Modelo de interfaz de cancelación de suscripciones.](https://b.stripecdn.com/docs-statics-srv/assets/fixed-price-subscriptions-guide-account-settings.6559626ba4b434826a67abfea165e097.png)
+
+Configuración de la cuenta con la posibilidad de cancelar la suscripción
+
+```javascript
+const cancelSubscription = async subscriptionId => {
+  const apiEndpoint =
+    Platform.OS === 'ios' ? 'http://localhost:4242' : 'http://10.0.2.2:4567';
+  const response = await fetch(`${apiEndpoint}/cancel-subscription`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      subscriptionId: subscriptionId,
+    }),
+  });
+  if (response.status === 200) {
+    const subscription = await response.json();
+    return subscription;
+  }
+};
+```
+
+En el back-end, define el punto de conexión para que la aplicación haga la llamada.
+
+#### Ruby
+
+```ruby
+
+# Don't put any keys in code. See https://docs.stripe.com/keys-best-practices.
+# Find your keys at https://dashboard.stripe.com/apikeys.
+client = Stripe::StripeClient.new('<<YOUR_SECRET_KEY>>')
+
+post '/cancel-subscription' do
+  content_type 'application/json'
+  data = JSON.parse request.body.read
+
+  deleted_subscription = client.v1.subscriptions.cancel(data['subscriptionId'])
+
+  deleted_subscription.to_json
+end
+```
+
+Tu back-end recibe un evento `customer.subscription.deleted`.
+
+Una vez que se cancela la suscripción, actualiza tu base de datos para eliminar el ID de suscripción de Stripe que estaba almacenado y limitar el acceso al servicio.
+
+Cuando una suscripción se cancela, no se puede reactivar. En su lugar, recopila información de facturación actualizada de tu cliente, actualiza su método de pago predeterminado y crea una nueva suscripción con su registro de cliente existente.
+
+## Prueba tu integración
+
+### Prueba métodos de pago
+
+Usa la siguiente tabla para probar diferentes métodos y escenarios de pago.
+
+| Método de pago      | Escenario                                                                                                                                                                                                                                                                                       | Cómo hacer la prueba                                                                                                                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Débito directo BECS | Tu cliente paga correctamente con débito directo BECS.                                                                                                                                                                                                                                          | Completa el formulario con el número de cuenta `900123456` y BSB `000000`. El PaymentIntent confirmado pasa en un principio al estado `processing` y, tres minutos más tarde, a `succeeded`. |
+| Débito directo BECS | El pago de tu cliente falla con un código de error `account_closed`.                                                                                                                                                                                                                            | Completa el formulario con el número de cuenta `111111113` y BSB `000000`.                                                                                                                   |
+| Tarjeta de crédito  | El pago con tarjeta se efectúa correctamente y no requiere autenticación.                                                                                                                                                                                                                       | Completa el formulario de tarjeta de crédito con el número de tarjeta `4242 4242 4242 4242` y cualquier fecha de vencimiento, CVC y código postal.                                           |
+| Tarjeta de crédito  | El pago con tarjeta requiere *autenticación* (Strong Customer Authentication (SCA) is a regulatory requirement in effect as of September 14, 2019, that impacts many European online payments. It requires customers to use two-factor authentication like 3D Secure to verify their purchase). | Completa el formulario de tarjeta de crédito con el número de tarjeta `4000 0025 0000 3155` y cualquier fecha de vencimiento, CVC y código postal.                                           |
+| Tarjeta de crédito  | La tarjeta es rechazada con el código `insufficient_funds`.                                                                                                                                                                                                                                     | Completa el formulario de tarjeta de crédito con el número de tarjeta `4000 0000 0000 9995` y cualquier fecha de vencimiento, CVC y código postal.                                           |
+| Débito directo SEPA | Tu cliente paga correctamente con débito directo SEPA.                                                                                                                                                                                                                                          | Completa el formulario con el número de cuenta `AT321904300235473204`. El PaymentIntent confirmado pasa inicialmente al estado “en proceso” y, tres minutos más tarde, a “completado”.       |
+| Débito directo SEPA | El estado de PaymentIntent de tu cliente pasa de `processing` a `requires_payment_method`.                                                                                                                                                                                                      | Completa el formulario con el número de cuenta `AT861904300235473202`.                                                                                                                       |
+
+### Supervisa eventos
+
+Configura webhooks para recibir notificaciones de los eventos de cambios en las suscripciones, como actualizaciones y cancelaciones. Obtén más información sobre los [webhooks de suscripciones](https://docs.stripe.com/billing/subscriptions/webhooks.md). Puedes ver los eventos en el [Dashboard](https://dashboard.stripe.com/test/events) o con la [CLI de Stripe](https://docs.stripe.com/webhooks.md#test-webhook).
+
+Para obtener más detalles, consulta [cómo probar tu integración con Billing](https://docs.stripe.com/billing/testing.md).
+
+## Optional: Permitir que los clientes cambien de plan [Cliente y servidor]
+
+Para permitirles a los clientes cambiar de suscripción, recopila el ID de precio de la opción a la que quieren pasar. A continuación, envía el nuevo ID de precio desde la aplicación a un punto de conexión del back-end. En este ejemplo, también se especifica el ID de suscripción, pero puedes recuperarlo de tu base de datos para el usuario que ha iniciado sesión.
+
+```javascript
+const updateSubscription = async (subscriptionId, priceId) => {
+  const apiEndpoint =
+    Platform.OS === 'ios' ? 'http://localhost:4242' : 'http://10.0.2.2:4567';
+  const response = await fetch(`${apiEndpoint}/update-subscription`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      subscriptionId: subscriptionId,
+      newPriceId: priceId,
+    }),
+  });
+  if (response.status === 200) {
+    const subscription = await response.json();
+    return subscription;
+  }
+};
+```
+
+En el back-end, define el punto de conexión para que el front-end haga la llamada especificando el ID de suscripción y el nuevo ID de precio. La suscripción ahora es Premium, a USD&nbsp;15 por mes, en lugar de Básica a USD&nbsp;5 por mes.
+
+#### Ruby
+
+```ruby
+
+# Don't put any keys in code. See https://docs.stripe.com/keys-best-practices.
+# Find your keys at https://dashboard.stripe.com/apikeys.
+client = Stripe::StripeClient.new('<<YOUR_SECRET_KEY>>')
+
+post '/update-subscription' do
+  content_type 'application/json'
+  data = JSON.parse request.body.read
+
+  subscription = client.v1.subscriptions.retrieve(data['subscriptionId'])
+
+  updated_subscription =
+    client.v1.subscriptions.update(
+      data['subscriptionId'],
+      cancel_at_period_end: false,
+      items: [
+        { id: subscription.items.data[0].id, price: data['newPriceId'] }
+      ]
+    )
+
+  updated_subscription.to_json
+end
+```
+
+En tu aplicación, se recibe un evento `customer.subscription.updated`.
+
+## Optional: Previsualizar un cambio de precio [Cliente y servidor]
+
+Cuando tu cliente cambia de suscripción, a menudo es necesario hacer un ajuste en el importe adeudado que se conoce como [prorrateo](https://docs.stripe.com/billing/subscriptions/prorations.md). Puedes usar el [punto de conexión de creación de la vista previa de facturas](https://docs.stripe.com/api/invoices/create_preview.md) para mostrarles a tus clientes el importe ajustado.
+
+Desde la aplicación, pasa los datos de la vista previa de la factura a un punto de conexión del back-end.
+
+```javascript
+const createPreviewInvoice = async (subscriptionId, priceId, newPriceId) => {
+  const apiEndpoint =
+    Platform.OS === 'ios' ? 'http://localhost:4242' : 'http://10.0.2.2:4567';
+  const response = await fetch(`${apiEndpoint}/create-preview-invoice`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      subscriptionId: subscriptionId,
+      priceId: priceId,
+      newPriceId: newPriceId,
+    }),
+  });
+  if (response.status === 200) {
+    const invoice = await response.json();
+    return invoice;
+  }
+};
+```
+
+En el back-end, define el punto de conexión para que el front-end haga la llamada.
+
+#### Accounts&nbsp;v2
+
+#### Ruby
+
+```ruby
+
+# Don't put any keys in code. See https://docs.stripe.com/keys-best-practices.
+# Find your keys at https://dashboard.stripe.com/apikeys.
+client = Stripe::StripeClient.new('<<YOUR_SECRET_KEY>>')
+
+post '/create-preview-invoice' do
+  content_type 'application/json'
+  data = JSON.parse request.body.read
+
+  subscription = Stripe::Subscription.retrieve(data['subscriptionId'])
+
+  invoice =
+    Stripe::Invoice.create_preview(
+      customer_account: data['customerAccountId'],
+      subscription: data['subscriptionId'],
+      subscription_details: {
+        items: [
+          { id: subscription.items.data[0].id, deleted: true },
+          { price: data['newPriceId'], deleted: false }
+        ]
+      }
+    )
+
+  invoice.to_json
+end
+```
+
+#### Customers&nbsp;v1
+
+#### Ruby
+
+```ruby
+
+# Don't put any keys in code. See https://docs.stripe.com/keys-best-practices.
+# Find your keys at https://dashboard.stripe.com/apikeys.
+client = Stripe::StripeClient.new('<<YOUR_SECRET_KEY>>')
+
+post '/create-preview-invoice' do
+  content_type 'application/json'
+  data = JSON.parse request.body.read
+
+  subscription = client.v1.subscriptions.retrieve(data['subscriptionId'])
+
+  invoice =
+    client.v1.invoices.create_preview(
+      customer: data['customerId'],
+      subscription: data['subscriptionId'],
+      subscription_details: {
+        items: [
+          { id: subscription.items.data[0].id, deleted: true },
+          { price: data['newPriceId'], deleted: false }
+        ]
+      }
+    )
+
+  invoice.to_json
+end
+```
+
+## Optional: Mostrar el método de pago del cliente [Cliente y servidor]
+
+Mostrar la marca y los últimos 4 dígitos de la tarjeta le permite al cliente saber qué tarjeta se está utilizando o si es necesario actualizar el método de pago.
+
+Desde el front-end, pasa el ID del método de pago a un punto de conexión del back-end que recupere los datos del método de pago.
+
+```javascript
+const retrieveCustomerPaymentMethod = async paymentMethodId => {
+  const apiEndpoint =
+    Platform.OS === 'ios' ? 'http://localhost:4242' : 'http://10.0.2.2:4567';
+  const response = await fetch(
+    `${apiEndpoint}/retrieve-customer-payment-method`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        paymentMethodId: paymentMethodId,
+      }),
+    },
+  );
+  if (response.status === 200) {
+    const paymentMethod = await response.json();
+    return paymentMethod;
+  }
+};
+```
+
+En el back-end, define el punto de conexión para que la aplicación haga la llamada.
+
+#### Ruby
+
+```ruby
+
+# Don't put any keys in code. See https://docs.stripe.com/keys-best-practices.
+# Find your keys at https://dashboard.stripe.com/apikeys.
+client = Stripe::StripeClient.new('<<YOUR_SECRET_KEY>>')
+
+post '/retrieve-customer-payment-method' do
+  content_type 'application/json'
+  data = JSON.parse request.body.read
+
+  payment_method = client.v1.payment_methods.retrieve(data['paymentMethodId'])
+
+  payment_method.to_json
+end
+```
+
+Ejemplo de respuesta:
+
+```json
+{
+  "id": "pm_1GcbHY2eZvKYlo2CoqlVxo42",
+  "object": "payment_method",
+  "billing_details": {
+    "address": {
+      "city": null,
+      "country": null,
+      "line1": null,
+      "line2": null,
+      "postal_code": null,
+      "state": null
+    },
+    "email": null,
+    "name": null,
+    "phone": null
+  },
+  "card": {
+    "brand": "visa",
+    "checks": {
+      "address_line1_check": null,
+      "address_postal_code_check": null,
+      "cvc_check": "pass"
+    },
+    "country": "US",
+    "exp_month": 8,
+    "exp_year": 2021,
+    "fingerprint": "Xt5EWLLDS7FJjR1c",
+    "funding": "credit",
+    "generated_from": null,
+    "last4": "4242",
+    "three_d_secure_usage": {
+      "supported": true
+    },
+    "wallet": null
+  },
+  "created": 1588010536,
+  "customer": "cus_HAxB7dVQxhoKLh",
+  "livemode": false,
+  "metadata": {},
+  "type": "card"
+}
+```
+
+> Te recomendamos guardar `paymentMethod.id` y `last4` en tu base de datos, por ejemplo, `paymentMethod.id` como `stripeCustomerPaymentMethodId` en tu colección o tabla de `users`. Si lo necesitas, también tienes la opción de guardar `exp_month`, `exp_year`, `fingerprint` y `billing_details`. Esto sirve para limitar el número de llamadas a Stripe, tanto para mejorar el rendimiento como para evitar una posible limitación de la frecuencia.
+
+## Cuéntales a tus clientes qué es Stripe
+
+Stripe recopila información sobre las interacciones de los clientes con Elements para proporcionarte servicios, mejorarlos y prevenir el fraude. Esto incluye el uso de cookies y direcciones IP para identificar qué Elements vio un cliente durante una sola sesión de finalización de compra. Tienes la responsabilidad de divulgar y obtener todos los derechos y consentimientos necesarios para que Stripe use los datos para dichos fines. Si deseas obtener más información, visita nuestro [centro de privacidad](https://stripe.com/legal/privacy-center#as-a-business-user-what-notice-do-i-provide-to-my-end-customers-about-stripe).
+
+

@@ -18,7 +18,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.urielnho.roadguard"
+      "package": "com.urielnho.roadguard",
+      "versionCode": 3
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -34,10 +35,16 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "RoadGuard utiliza tu ubicación durante el viaje para medir velocidad y distancia."
+          "locationWhenInUsePermission": "RoadGuard utiliza tu ubicación durante el viaje para medir velocidad y distancia.",
+          "locationAlwaysAndWhenInUsePermission": "RoadGuard registra la ubicación de tu viaje activo incluso con la pantalla bloqueada.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       "expo-router",
+      "expo-notifications",
+      "expo-web-browser",
       [
         "expo-image-picker",
         {
@@ -45,8 +52,21 @@
           "cameraPermission": false,
           "microphonePermission": false
         }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "enableGooglePay": false
+        }
       ]
     ],
-    "scheme": "roadguard"
+    "scheme": "roadguard",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e46da8ca-794e-4a56-b6de-dc646bf3577c"
+      }
+    },
+    "owner": "mandinho777"
   }
 }

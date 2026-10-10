@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, Share, Text, TextInput, View } from 'react-native';
+import { SubscriptionManager } from './SubscriptionManager';
+import { openBilling } from './billingClient';
+import type { useSubscription } from './useSubscription';
 import { Trip, vehicles, Vehicle } from './domain';
 import { Accent, accents, analyzeTrips, Preferences, tripAdvice } from './premiumDomain';
 import { pickAvatar } from './avatar';
 import { ProfileAvatar } from './ProfileAvatar';
-import { Button, Card, colors, Disclosure, Metric, s, ValueRow } from './ui';
+import { Button, Card, colors, Disclosure, Metric, useStyles, ValueRow } from './ui';
 
 const benefits = [
   { title: 'Tu estilo', description: 'Elige tu foto, personaliza tu nombre y cambia el color de acento de la app.' },
@@ -13,12 +16,13 @@ const benefits = [
   { title: 'Reportes y recomendaciones', description: 'Comparte un resumen de tus recorridos y consulta sugerencias basadas en los eventos registrados.' },
 ];
 
-export function Premium({ preferences, trips, onChange }: { preferences: Preferences; trips: Trip[]; onChange: (next: Preferences) => Promise<void> }) {
-  const [checkout, setCheckout] = useState(false);
-  const [success, setSuccess] = useState(false);
+export function Premium({ preferences, trips, onChange, billing }: { preferences: Preferences; trips: Trip[]; onChange: (next: Preferences) => Promise<void>; billing: ReturnType<typeof useSubscription> }) {
+  const s = useStyles();
+  const [managing, setManaging] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  if (billing.active && verifying) setVerifying(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [method, setMethod] = useState<'card' | 'wallet'>('card');
   const [name, setName] = useState(preferences.displayName);
   const [vehicle, setVehicle] = useState<Vehicle>('auto');
   const [alias, setAlias] = useState(preferences.vehicleNames.auto);
@@ -30,12 +34,12 @@ export function Premium({ preferences, trips, onChange }: { preferences: Prefere
     catch { Alert.alert('No se pudo guardar', 'Intenta de nuevo. Los cambios no se guardaron.'); }
     finally { setBusy(false); }
   }
-  async function confirmPayment() {
+  async function pay() {
     setBusy(true); setError('');
     try {
-      await onChange({ ...preferences, premiumDemo: true, activatedAt: Date.now() });
-      setSuccess(true);
-    } catch { setError('No se pudo guardar la activación. No se realizó ningún cobro.'); }
+      if (await openBilling('checkout')) setVerifying(true);
+      billing.refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo abrir Stripe.'); }
     finally { setBusy(false); }
   }
   async function changePhoto() {
@@ -51,6 +55,7 @@ export function Premium({ preferences, trips, onChange }: { preferences: Prefere
     try { await Share.share({ title: 'Reporte RoadGuard', message }); }
     catch { Alert.alert('No se pudo compartir', 'Intenta de nuevo desde tu teléfono.'); }
   }
+  if (managing) return <SubscriptionManager onClose={() => setManaging(false)} onChanged={billing.refresh} />;
   return <>
     <View style={s.pageHeading}>
       <Text style={s.eyebrow}>RoadGuard Premium</Text>
@@ -58,11 +63,16 @@ export function Premium({ preferences, trips, onChange }: { preferences: Prefere
       <Text style={s.description}>{preferences.premiumDemo ? 'Personaliza tu experiencia y conoce mejor tus recorridos.' : 'Dale tu estilo a RoadGuard y desbloquea el análisis de tus viajes.'}</Text>
     </View>
     <Card>
-      <View style={s.row}><Text style={s.title}>{preferences.premiumDemo ? 'Premium activo' : 'Plan mensual'}</Text><Text style={s.badge}>{preferences.premiumDemo ? 'Demo' : 'Pago simulado'}</Text></View>
+      <View style={s.row}><Text style={s.title}>{preferences.premiumDemo ? 'Premium activo' : 'Plan mensual'}</Text><Text style={s.badge}>Stripe · Prueba</Text></View>
       <Text style={s.premiumPrice}>$49.99<Text style={s.premiumCurrency}> MXN / mes</Text></Text>
-      <Text style={s.muted}>Precio de referencia para la suscripción mensual.</Text>
-      {!preferences.premiumDemo && <Button title="Probar Premium" onPress={() => { setSuccess(false); setError(''); setCheckout(true); }} />}
-      <Text style={s.footnote}>Demostración local. No se cobra dinero ni se crea una suscripción en Stripe.</Text>
+      <Text style={s.muted}>Suscripción mensual de prueba. No se cobra dinero real.</Text>
+      {!preferences.premiumDemo && !verifying && <Button title={busy ? 'Abriendo Stripe…' : 'Suscribirme con Stripe'} disabled={busy} onPress={() => void pay()} />}
+      <Button title="Administrar suscripción" secondary disabled={busy} onPress={() => setManaging(true)} />
+      {verifying && !billing.active && <Text accessibilityLiveRegion="polite" style={s.muted}>Verificando pago… Premium se actualizará automáticamente al recibir la confirmación.</Text>}
+      {!!(error || billing.error) && <Text accessibilityRole="alert" style={s.notice}>{error || billing.error}</Text>}
+      {!billing.ready && <Text style={s.muted}>Esperando verificación de Premium…</Text>}
+      {billing.subscription?.cancelAtPeriodEnd && <Text style={s.notice}>Cancelación programada al finalizar el período pagado.</Text>}
+      <Text style={s.footnote}>Usa una tarjeta de prueba de Stripe. Ingresa tu tarjeta en el formulario seguro. Premium se activa cuando el servidor confirma el pago.</Text>
     </Card>
     {!preferences.premiumDemo && <View style={s.stacked}>
       <Text style={s.title}>{preferences.premiumDemo ? 'Tus beneficios' : 'Incluido en Premium'}</Text>
@@ -72,12 +82,12 @@ export function Premium({ preferences, trips, onChange }: { preferences: Prefere
       </View>)}
     </View>}
     {preferences.premiumDemo && <>
-      <Card><Text style={s.title}>Tu perfil</Text><View style={s.row}><ProfileAvatar preferences={preferences} /><View style={{ flex: 1 }}><Text style={s.body}>{preferences.displayName || 'Tu nombre'}</Text><Text style={s.muted}>Premium · Demo</Text></View></View>
+      <Card><Text style={s.title}>Tu perfil</Text><View style={s.row}><ProfileAvatar preferences={preferences} /><View style={{ flex: 1 }}><Text style={s.body}>{preferences.displayName || 'Tu nombre'}</Text><Text style={s.muted}>Premium · Stripe prueba</Text></View></View>
         <Button title="Cambiar foto" secondary disabled={busy} onPress={() => void changePhoto()} />
         <Text style={s.caption}>Nombre visible</Text><TextInput accessibilityLabel="Nombre visible" value={name} onChangeText={setName} maxLength={30} placeholder="¿Cómo te llamas?" placeholderTextColor={colors.muted} style={s.input} />
         <Button title="Guardar nombre" disabled={busy || name.trim() === preferences.displayName} onPress={() => void update({ ...preferences, displayName: name.trim() })} />
         <Text style={s.caption}>Color de acento</Text><View style={s.row}>{(Object.keys(accents) as Accent[]).map(key => <Pressable key={key} accessibilityRole="radio" accessibilityLabel={accents[key].name} accessibilityState={{ checked: preferences.accent === key, disabled: busy }} aria-checked={preferences.accent === key} disabled={busy} onPress={() => void update({ ...preferences, accent: key })} style={[s.swatch, { backgroundColor: accents[key].color, borderColor: preferences.accent === key ? colors.ink : accents[key].color }]}><Text style={{ color: '#FFFFFF', fontSize: 18 }}>{preferences.accent === key ? '✓' : ''}</Text></Pressable>)}</View>
-        <Text style={s.footnote}>Perfil local en este dispositivo. No es una cuenta ni requiere iniciar sesión.</Text>
+        <Text style={s.footnote}>La foto y la personalización se guardan para tu cuenta en este dispositivo.</Text>
       </Card>
       <Card><Text style={s.title}>Tu vehículo, con tu nombre</Text><View style={s.vehicleGroup}>{(Object.keys(vehicles) as Vehicle[]).map(key => <Pressable key={key} accessibilityRole="radio" accessibilityLabel={vehicles[key].name} accessibilityState={{ checked: vehicle === key }} aria-checked={vehicle === key} onPress={() => { setVehicle(key); setAlias(preferences.vehicleNames[key]); }} style={[s.vehicle, vehicle === key && s.vehicleSelected]}><Text style={s.body}>{vehicles[key].name}</Text><Text style={s.muted}>{preferences.vehicleNames[key]}</Text></Pressable>)}</View>
         <TextInput accessibilityLabel="Nombre de tu vehículo" value={alias} onChangeText={setAlias} maxLength={30} placeholder="Ej. Mi bicicleta" placeholderTextColor={colors.muted} style={s.input} />
@@ -92,19 +102,8 @@ export function Premium({ preferences, trips, onChange }: { preferences: Prefere
         <Text style={s.caption}>Sugerencia para tu próximo viaje</Text><Text style={s.description}>{tripAdvice(analytics.eventCounts[0]?.[0])}</Text>
       </Card>
       <Button title="Compartir reporte de viajes" disabled={!analytics.count} onPress={() => void shareReport()} />
-      <Disclosure title="Administrar demostración"><Text style={s.footnote}>Puedes volver al plan gratuito. Tus viajes y personalización se conservan; los beneficios Premium se ocultan hasta que vuelvas a activarlos.</Text><Button title="Volver al plan gratuito" secondary disabled={busy} onPress={() => void update({ ...preferences, premiumDemo: false })} /></Disclosure>
+      <Disclosure title="Tu suscripción"><Text style={s.footnote}>Gestiona la cancelación desde Administrar suscripción. Conservas los beneficios hasta finalizar el período confirmado por Stripe. Tus viajes y personalización permanecen guardados.</Text></Disclosure>
     </>}
-    <Disclosure title="Servicio Premium en desarrollo"><Text style={s.description}>Las notificaciones push, el envío a contactos y la integración de pago real con Stripe se incorporarán más adelante. La alerta de accidente actual sigue siendo local.</Text><Text style={s.footnote}>Solo se simula el pago. Los sensores y las estadísticas siempre usan datos reales.</Text></Disclosure>
-    <Modal visible={checkout} transparent animationType="fade" onRequestClose={() => { if (!busy) setCheckout(false); }}><View style={s.overlay}><View style={s.alertCard}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.modalContent}>
-      <Text style={s.eyebrow}>Simulación de pago</Text><Text style={s.hero}>{success ? 'Premium activado' : 'Confirmar Premium'}</Text>
-      {success ? <><Text style={s.description}>Ya puedes personalizar tu perfil y consultar las herramientas Premium. No se realizó ningún cobro.</Text><Text style={s.badge}>Activación de demostración</Text><Button title="Explorar mi Premium" onPress={() => setCheckout(false)} /></> : <>
-        <ValueRow label="Plan mensual" value="$49.99 MXN" />
-        <Text style={s.caption}>Método de demostración</Text>
-        {(['card', 'wallet'] as const).map(key => <Pressable key={key} accessibilityRole="radio" accessibilityLabel={key === 'card' ? 'Tarjeta demo' : 'Billetera demo'} accessibilityState={{ checked: method === key, disabled: busy }} aria-checked={method === key} disabled={busy} onPress={() => setMethod(key)} style={[s.vehicle, method === key && s.vehicleSelected]}><View style={{ flex: 1 }}><Text style={s.body}>{key === 'card' ? 'Tarjeta demo' : Platform.OS === 'ios' ? 'Apple Pay · Demo' : Platform.OS === 'android' ? 'Google Pay · Demo' : 'Billetera · Demo'}</Text><Text style={s.muted}>{key === 'card' ? '•••• 4242 · Datos ficticios' : 'Método simulado, sin conexión'}</Text></View><View style={[s.selection, method === key && s.selectionActive]}>{method === key && <View style={s.selectionDot} />}</View></Pressable>)}
-        <Text style={s.footnote}>No introduzcas datos bancarios. Este flujo no se conecta con Stripe, Apple Pay ni Google Pay.</Text>
-        {!!error && <Text style={s.notice}>{error}</Text>}
-        <Button title={busy ? 'Activando…' : 'Confirmar pago simulado'} disabled={busy} onPress={() => void confirmPayment()} /><Button title="Cancelar" secondary disabled={busy} onPress={() => setCheckout(false)} />
-      </>}
-    </ScrollView></View></View></Modal>
+    <Text style={s.footnote}>Tu suscripción está vinculada a tu cuenta de RoadGuard. Los viajes completos y la personalización se guardan en este dispositivo.</Text>
   </>;
 }

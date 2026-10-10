@@ -1,0 +1,37 @@
+[
+  {
+    "id": "ca871145-0616-4305-b20c-45068a140ca6",
+    "status": "NEW",
+    "platform": "ANDROID",
+    "artifacts": {},
+    "fingerprint": {
+      "id": "01a11ff1-5a28-74a1-9cc9-97515291c361",
+      "hash": "482dc050fff6ddb58f6b97a3603c0823b6a4caea"
+    },
+    "initiatingActor": {
+      "id": "0c395b8f-549c-4bc1-ab9f-31ac2a215a79",
+      "displayName": "mandinho777"
+    },
+    "logFiles": [],
+    "app": {
+      "id": "e46da8ca-794e-4a56-b6de-dc646bf3577c",
+      "name": "roadguard",
+      "slug": "roadguard",
+      "ownerAccount": {
+        "id": "5850c9f3-ff56-4946-8e21-833249409626",
+        "name": "mandinho777"
+      }
+    },
+    "distribution": "INTERNAL",
+    "buildProfile": "preview",
+    "appIdentifier": "com.urielnho.roadguard",
+    "sdkVersion": "57.0.0",
+    "appVersion": "1.0.0",
+    "appBuildVersion": "2",
+    "priority": "NORMAL_PLUS",
+    "createdAt": "2026-10-09T09:14:33.317Z",
+    "updatedAt": "2026-10-09T09:14:33.317Z",
+    "expirationDate": "2026-10-23T09:14:33.380Z",
+    "isForIosSimulator": false
+  }
+]
